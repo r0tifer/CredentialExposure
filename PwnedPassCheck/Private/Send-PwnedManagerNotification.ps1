@@ -45,9 +45,9 @@ function Send-PwnedManagerNotification {
     $subject = "Unsafe Password Summary - $ReportingFrequency Report"
 
     if ($recordCount -eq 1) {
-        $executiveSummary = 'One user account currently has a compromised password that requires follow-up.'
+        $executiveSummary = 'One user account currently has a unsafe password that requires follow-up.'
     } else {
-        $executiveSummary = "$recordCount user accounts currently have compromised passwords that require follow-up."
+        $executiveSummary = "$recordCount user accounts currently have unsafe passwords that require follow-up."
     }
 
     $sortedRecords = @($records | Sort-Object DisplayName, SamAccountName)
@@ -118,15 +118,14 @@ function Send-PwnedManagerNotification {
     [void]$builder.AppendLine('</head>')
     [void]$builder.AppendLine('<body>')
     [void]$builder.AppendLine("<p><strong>Executive Summary:</strong> $([System.Net.WebUtility]::HtmlEncode($executiveSummary))</p>")
-    [void]$builder.AppendLine("<p>This $frequencyDescription report lists every account with a compromised password detected by Get-Pwned-PassCheck. Review the affected accounts below and coordinate with the assigned managers or service desk for remediation.</p>")
 
     [void]$builder.AppendLine('<h2>Summary</h2>')
     [void]$builder.AppendLine('<ul>')
-    [void]$builder.AppendLine("<li><strong>Total accounts with compromised passwords:</strong> $recordCount</li>")
+    [void]$builder.AppendLine("<li><strong>Total accounts with unsafe passwords:</strong> $recordCount</li>")
     [void]$builder.AppendLine("<li><strong>Total accounts sharing passwords:</strong> $sharedAccountCount</li>")
     [void]$builder.AppendLine('</ul>')
 
-    [void]$builder.AppendLine('<h2>Compromised Accounts</h2>')
+    [void]$builder.AppendLine('<h2>unsafe Accounts</h2>')
     if ($sortedRecords) {
         [void]$builder.AppendLine('<ul>')
         foreach ($record in $sortedRecords) {
@@ -142,7 +141,7 @@ function Send-PwnedManagerNotification {
         }
         [void]$builder.AppendLine('</ul>')
     } else {
-        [void]$builder.AppendLine('<p>No compromised accounts detected.</p>')
+        [void]$builder.AppendLine('<p>No unsafe accounts detected.</p>')
     }
 
     [void]$builder.AppendLine('<h2>Shared Password Groups</h2>')
@@ -167,7 +166,7 @@ function Send-PwnedManagerNotification {
             [void]$builder.AppendLine('</ul>')
         }
     } else {
-        [void]$builder.AppendLine('<p>No accounts are currently sharing compromised passwords.</p>')
+        [void]$builder.AppendLine('<p>No accounts are currently sharing passwords.</p>')
     }
 
     [void]$builder.AppendLine('<table role="presentation">')

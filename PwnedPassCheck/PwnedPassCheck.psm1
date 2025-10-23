@@ -120,10 +120,10 @@ function Initialize-PwnedPassCheckDataEnvironment {
     # Domain Controllers: Provide one or more fully qualified domain controller hostnames separated by commas (e.g., "dc1.corp.example.com, dc2.corp.example.com").
     DomainControllers = "dc1.corp.example.com"
 
-    # Notify User: Set to $true to email affected users when their password is compromised; otherwise set to $false.
+    # Notify User: Set to $true to email affected users when their password is detected; otherwise set to $false.
     NotifyUser = $false
 
-    # Notify Manager: Set to $true to notify the user's manager about compromised passwords; otherwise set to $false.
+    # Notify Manager: Set to $true to notify the user's manager about detected passwords; otherwise set to $false.
     NotifyManager = $false
 
     # ManagersToNotify: (Optional) Additional manager email addresses to receive alerts, separated by commas. Leave blank to disable.
