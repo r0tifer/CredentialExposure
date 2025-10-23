@@ -8,11 +8,11 @@ public sealed class PwshRunnerOptions
 
     public string PwshPath { get; set; } = "pwsh.exe";
 
-    public string ServiceScriptPath { get; set; } = "PwnedPassCheckServiceRunner.ps1";
+    public string ServiceScriptPath { get; set; } = PwnedPassCheckServiceDefaults.ServiceRunnerPath;
 
-    public string? SettingsPath { get; set; }
+    public string? SettingsPath { get; set; } = PwnedPassCheckServiceDefaults.SettingsPath;
 
-    public string? AuditLogPath { get; set; }
+    public string? AuditLogPath { get; set; } = PwnedPassCheckServiceDefaults.AuditLogPath;
 
     public bool Verbose { get; set; }
 

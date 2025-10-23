@@ -193,7 +193,7 @@ public sealed class PwnedPassCheckWorker : BackgroundService
     {
         if (string.IsNullOrWhiteSpace(path))
         {
-            return Path.Combine(_contentRoot, "PwnedPassCheckServiceRunner.ps1");
+            return PwnedPassCheckServiceDefaults.ServiceRunnerPath;
         }
 
         if (Path.IsPathRooted(path))
@@ -201,6 +201,6 @@ public sealed class PwnedPassCheckWorker : BackgroundService
             return path;
         }
 
-        return Path.Combine(_contentRoot, path);
+        return Path.Combine(PwnedPassCheckServiceDefaults.RootDirectory, path);
     }
 }

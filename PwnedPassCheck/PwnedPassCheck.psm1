@@ -69,6 +69,8 @@ function Get-PwnedPassCheckDefaultDirectory {
 $script:DefaultDataDirectory = Get-PwnedPassCheckDefaultDirectory
 $script:DefaultSettingsPath = Join-Path -Path $script:DefaultDataDirectory -ChildPath 'PwnedPassCheckSettings.psd1'
 $script:DefaultAuditLogPath = Join-Path -Path $script:DefaultDataDirectory -ChildPath 'PwnedPassCheckAuditLog.json'
+$script:DefaultServiceRunnerPath = Join-Path -Path $script:DefaultDataDirectory -ChildPath 'PwnedPassCheckServiceRunner.ps1'
+$script:DefaultServiceAppSettingsPath = Join-Path -Path $script:DefaultDataDirectory -ChildPath 'appsettings.json'
 
 function Initialize-PwnedPassCheckDataEnvironment {
     $status = [pscustomobject]@{
@@ -79,6 +81,12 @@ function Initialize-PwnedPassCheckDataEnvironment {
         SettingsPath           = $script:DefaultSettingsPath
         AuditLogPath           = $script:DefaultAuditLogPath
         SettingsTemplateSource = $null
+        ServiceRunnerPath      = $script:DefaultServiceRunnerPath
+        ServiceRunnerCopied    = $false
+        ServiceRunnerSource    = $null
+        ServiceAppSettingsPath = $script:DefaultServiceAppSettingsPath
+        ServiceAppSettingsCopied = $false
+        ServiceAppSettingsSource = $null
     }
 
     if (-not (Test-Path -Path $script:DefaultDataDirectory)) {
@@ -178,6 +186,46 @@ function Initialize-PwnedPassCheckDataEnvironment {
         } catch {
             throw "Failed to create default audit log at '$($script:DefaultAuditLogPath)': $_"
         }
+    }
+
+    $serviceRunnerCandidates = @(
+        (Join-Path -Path $script:RepoRoot -ChildPath 'Service\PwnedPassCheckServiceRunner.ps1'),
+        (Join-Path -Path $script:ModuleRoot -ChildPath 'Service\PwnedPassCheckServiceRunner.ps1')
+    ) | Where-Object { $_ -and (Test-Path -Path $_) }
+
+    if ($serviceRunnerCandidates) {
+        $status.ServiceRunnerSource = $serviceRunnerCandidates | Select-Object -First 1
+
+        if (-not (Test-Path -Path $script:DefaultServiceRunnerPath)) {
+            try {
+                Copy-Item -Path $status.ServiceRunnerSource -Destination $script:DefaultServiceRunnerPath -Force
+                $status.ServiceRunnerCopied = $true
+            } catch {
+                throw "Failed to copy service runner script from '$($status.ServiceRunnerSource)' to '$($script:DefaultServiceRunnerPath)': $_"
+            }
+        }
+    } elseif (-not (Test-Path -Path $script:DefaultServiceRunnerPath)) {
+        Write-Warning "Unable to locate a template for 'PwnedPassCheckServiceRunner.ps1'. Ensure the module includes the service assets."
+    }
+
+    $serviceAppSettingsCandidates = @(
+        (Join-Path -Path $script:RepoRoot -ChildPath 'Service\appsettings.json'),
+        (Join-Path -Path $script:ModuleRoot -ChildPath 'Service\appsettings.json')
+    ) | Where-Object { $_ -and (Test-Path -Path $_) }
+
+    if ($serviceAppSettingsCandidates) {
+        $status.ServiceAppSettingsSource = $serviceAppSettingsCandidates | Select-Object -First 1
+
+        if (-not (Test-Path -Path $script:DefaultServiceAppSettingsPath)) {
+            try {
+                Copy-Item -Path $status.ServiceAppSettingsSource -Destination $script:DefaultServiceAppSettingsPath -Force
+                $status.ServiceAppSettingsCopied = $true
+            } catch {
+                throw "Failed to copy default service settings from '$($status.ServiceAppSettingsSource)' to '$($script:DefaultServiceAppSettingsPath)': $_"
+            }
+        }
+    } elseif (-not (Test-Path -Path $script:DefaultServiceAppSettingsPath)) {
+        Write-Warning "Unable to locate a template for 'appsettings.json'. Ensure the module includes the service assets."
     }
 
     return $status

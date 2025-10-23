@@ -89,19 +89,23 @@ Running the audit once and relying on manual follow-up defeats the purpose of au
 
 ## Run Get-Pwnd-PassCheck as a Windows service
 
+**Service layout**
+   - The worker service always loads configuration from `C:\PwndPassCheck\appsettings.json` and executes `C:\PwndPassCheck\PwnedPassCheckServiceRunner.ps1`. Keep every runtime asset (settings file, audit log, runner script) in that directory unless you explicitly reconfigure them in `appsettings.json`.
+   - Running `instdev.ps1` on the service host seeds `C:\PwndPassCheck` with `appsettings.json`, `PwnedPassCheckServiceRunner.ps1`, the module settings file, and an empty audit log so the Windows service can start immediately after publishing the binaries.
+   - If you regenerate or customise the service files, update the copies under `C:\PwndPassCheck` as well as the templates in `PwnedPassCheck\Service\` so future installs stay in sync.
+
 **Publish the worker service**
    - From the repo root, run `dotnet publish .\Service\PwnedPassCheckService.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true`.
    - The compiled binaries land under `Service\bin\Release\net6.0-windows\win-x64\publish`.
 
 **Deploy the payload**
    - Create a target folder such as `C:\Program Files\PwnedPassCheckService`.
-   - Copy the entire contents of the `publish` directory (including `appsettings.json` and `PwnedPassCheckServiceRunner.ps1`) into that folder.
+   - Copy the entire contents of the `publish` directory into that folder. Do **not** move `appsettings.json` or `PwnedPassCheckServiceRunner.ps1` out of `C:\PwndPassCheck`; the service reads them in place from that directory.
 
 **Edit the service settings**
-   - Open `C:\Program Files\PwnedPassCheckService\appsettings.json`.
+   - Update `C:\PwndPassCheck\appsettings.json` before registering the service. The worker reloads changes automatically while running.
    - Set `Service:PwshPath` to the full path of `pwsh.exe` (use `powershell.exe` if PowerShell 5.1 is required).
-   - Point `Service:ServiceScriptPath` to the installed `PwnedPassCheckServiceRunner.ps1` or another wrapper script if you customise it.
-   - Fill in `Service:SettingsPath` and `Service:AuditLogPath` with the same paths you use when running the module interactively.
+   - Confirm `Service:ServiceScriptPath`, `Service:SettingsPath`, and `Service:AuditLogPath` point at the assets in `C:\PwndPassCheck` (change them only if you relocate the directory and update all references together).
    - Adjust `Service:RunIntervalMinutes` to the cadence you want (minimum 5, default 30) and flip `Verbose` to `true` if you want detailed logging.
 
 **Confirm the runner script**

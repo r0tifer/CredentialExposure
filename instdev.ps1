@@ -96,6 +96,22 @@ try {
         }
     }
 
+    if ($environmentStatus.ServiceRunnerPath) {
+        if ($environmentStatus.ServiceRunnerCopied) {
+            Write-Host "Copied service runner script to '$($environmentStatus.ServiceRunnerPath)'." -ForegroundColor Green
+        } elseif (Test-Path -Path $environmentStatus.ServiceRunnerPath) {
+            Write-Host "Service runner script already present at '$($environmentStatus.ServiceRunnerPath)'." -ForegroundColor DarkGray
+        }
+    }
+
+    if ($environmentStatus.ServiceAppSettingsPath) {
+        if ($environmentStatus.ServiceAppSettingsCopied) {
+            Write-Host "Copied default service settings to '$($environmentStatus.ServiceAppSettingsPath)'." -ForegroundColor Green
+        } elseif (Test-Path -Path $environmentStatus.ServiceAppSettingsPath) {
+            Write-Host "Service settings already present at '$($environmentStatus.ServiceAppSettingsPath)'." -ForegroundColor DarkGray
+        }
+    }
+
     if ($environmentStatus.SettingsFileCreated) {
         Write-Warning "Update the settings file at '$($environmentStatus.SettingsPath)' before running password audits."
     }
