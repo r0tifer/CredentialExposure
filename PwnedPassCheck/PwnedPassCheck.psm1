@@ -72,6 +72,7 @@ $script:DefaultAuditLogPath = Join-Path -Path $script:DefaultDataDirectory -Chil
 $script:DefaultServiceRunnerPath = Join-Path -Path $script:DefaultDataDirectory -ChildPath 'PwnedPassCheckServiceRunner.ps1'
 $script:DefaultServiceAppSettingsPath = Join-Path -Path $script:DefaultDataDirectory -ChildPath 'appsettings.json'
 $script:DefaultServiceProjectPath = Join-Path -Path $script:DefaultDataDirectory -ChildPath 'Service'
+$script:DefaultInstallerScriptPath = Join-Path -Path $script:DefaultDataDirectory -ChildPath 'instdev.ps1'
 
 function Initialize-PwnedPassCheckDataEnvironment {
     $status = [pscustomobject]@{
@@ -92,6 +93,10 @@ function Initialize-PwnedPassCheckDataEnvironment {
         ServiceProjectCopied   = $false
         ServiceProjectSource   = $null
         ServiceProjectPresent  = Test-Path -Path $script:DefaultServiceProjectPath -PathType Container
+        InstallerScriptPath    = $script:DefaultInstallerScriptPath
+        InstallerScriptCopied  = $false
+        InstallerScriptSource  = $null
+        InstallerScriptPresent = Test-Path -Path $script:DefaultInstallerScriptPath -PathType Leaf
     }
 
     if (-not (Test-Path -Path $script:DefaultDataDirectory)) {
@@ -254,6 +259,28 @@ function Initialize-PwnedPassCheckDataEnvironment {
         }
     } elseif (-not $status.ServiceProjectPresent) {
         Write-Warning "Unable to locate the service project. Clone the repository to access the Windows service source."
+    }
+
+    $installerScriptCandidates = @(
+        (Join-Path -Path $script:RepoRoot -ChildPath 'instdev.ps1'),
+        (Join-Path -Path $script:ModuleRoot -ChildPath '..\instdev.ps1'),
+        (Join-Path -Path $script:ModuleRoot -ChildPath 'instdev.ps1')
+    ) | Where-Object { $_ -and (Test-Path -Path $_ -PathType Leaf) }
+
+    if ($installerScriptCandidates) {
+        $status.InstallerScriptSource = $installerScriptCandidates | Select-Object -First 1
+
+        if (-not $status.InstallerScriptPresent) {
+            try {
+                Copy-Item -Path $status.InstallerScriptSource -Destination $script:DefaultInstallerScriptPath -Force
+                $status.InstallerScriptCopied = $true
+                $status.InstallerScriptPresent = $true
+            } catch {
+                throw "Failed to copy installer script from '$($status.InstallerScriptSource)' to '$($script:DefaultInstallerScriptPath)': $_"
+            }
+        }
+    } elseif (-not $status.InstallerScriptPresent) {
+        Write-Warning "Unable to locate 'instdev.ps1'. Download the installer script manually if you need to redeploy the module."
     }
 
     return $status

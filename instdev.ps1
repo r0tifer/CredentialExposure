@@ -76,6 +76,27 @@ function Copy-PwnedPassCheckServiceProject {
     Write-Host "Copied service project to '$destination'." -ForegroundColor Green
 }
 
+function Copy-PwnedPassCheckInstaller {
+    param(
+        [Parameter(Mandatory)]
+        [string]$SourceRoot
+    )
+
+    $dataDirectory = Get-PwnedPassCheckDefaultDirectory
+    if (-not (Test-Path -Path $dataDirectory -PathType Container)) {
+        New-Item -Path $dataDirectory -ItemType Directory -Force | Out-Null
+    }
+
+    $sourceScript = Join-Path -Path $SourceRoot -ChildPath 'instdev.ps1'
+    if (-not (Test-Path -Path $sourceScript -PathType Leaf)) {
+        return
+    }
+
+    $destinationScript = Join-Path -Path $dataDirectory -ChildPath 'instdev.ps1'
+    Copy-Item -Path $sourceScript -Destination $destinationScript -Force
+    Write-Host "Copied installer script to '$destinationScript'." -ForegroundColor Green
+}
+
 if ([String]::IsNullOrWhiteSpace($PSScriptRoot)) {
     # likely running from online
 
@@ -120,6 +141,7 @@ if ([String]::IsNullOrWhiteSpace($PSScriptRoot)) {
     Write-Host "Copying module from $sourceModulePath" -ForegroundColor Cyan
     Copy-Item $sourceModulePath $installpath -Recurse -Force
     Copy-PwnedPassCheckServiceProject -SourceRoot $extractedRoot.FullName
+    Copy-PwnedPassCheckInstaller -SourceRoot $extractedRoot.FullName
     Remove-Item $extractedRoot.FullName -Recurse -Force -Confirm:$false -EA SilentlyContinue
     Import-Module -Name PwnedPassCheck -Force
 } else {
@@ -127,6 +149,7 @@ if ([String]::IsNullOrWhiteSpace($PSScriptRoot)) {
     Remove-Item "$installpath\PwnedPassCheck" -Recurse -Force -EA SilentlyContinue
     Copy-Item "$PSScriptRoot\PwnedPassCheck" $installpath -Recurse -Force
     Copy-PwnedPassCheckServiceProject -SourceRoot $PSScriptRoot
+    Copy-PwnedPassCheckInstaller -SourceRoot $PSScriptRoot
     # force re-load the module (assuming you're editing locally and want to see changes)
     Import-Module -Name PwnedPassCheck -Force
 }
@@ -183,6 +206,16 @@ try {
             Write-Host "Service project already present at '$($environmentStatus.ServiceProjectPath)'." -ForegroundColor DarkGray
         } else {
             Write-Warning "Service project not found at '$($environmentStatus.ServiceProjectPath)'."
+        }
+    }
+
+    if ($environmentStatus.InstallerScriptPath) {
+        if ($environmentStatus.InstallerScriptCopied) {
+            Write-Host "Copied installer script to '$($environmentStatus.InstallerScriptPath)'." -ForegroundColor Green
+        } elseif ($environmentStatus.InstallerScriptPresent) {
+            Write-Host "Installer script already present at '$($environmentStatus.InstallerScriptPath)'." -ForegroundColor DarkGray
+        } else {
+            Write-Warning "Installer script not found at '$($environmentStatus.InstallerScriptPath)'."
         }
     }
 

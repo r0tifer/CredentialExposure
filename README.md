@@ -90,7 +90,7 @@ Running the audit once and relying on manual follow-up defeats the purpose of au
 ## Run Get-Pwnd-PassCheck as a Windows service
 
 **Service layout**
-   - Always run `instdev.ps1` on the machine that will host the Windows service. This installs the PowerShell module and seeds `C:\PwndPassCheck` with everything the worker expects (`appsettings.json`, `PwnedPassCheckServiceRunner.ps1`, the module settings file, and an empty audit log).
+   - Always run `instdev.ps1` on the machine that will host the Windows service. This installs the PowerShell module and seeds `C:\PwndPassCheck` with everything the worker expects (`appsettings.json`, `PwnedPassCheckServiceRunner.ps1`, the module settings file, an empty audit log, and a copy of the `Service` project). The installer script itself is also saved to `C:\PwndPassCheck\instdev.ps1` so you can rerun it locally if needed.
    - The worker service loads configuration exclusively from `C:\PwndPassCheck\appsettings.json` and executes `C:\PwndPassCheck\PwnedPassCheckServiceRunner.ps1`. Keep every runtime asset (settings file, audit log, runner script) in that directory unless you explicitly reconfigure them in `appsettings.json`.
    - If you customise any of those files, update both the live copies under `C:\PwndPassCheck` and the templates in `PwnedPassCheck\Service\` so future installs stay in sync.
 
