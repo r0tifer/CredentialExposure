@@ -158,7 +158,45 @@ function Get-PwnedADUserPassword {
 
         $compromisedAccountSummaries = New-Object System.Collections.Specialized.OrderedDictionary
         $sharedPasswordGroups = @()
-        $sharedPasswordTracker = [System.Collections.Generic.Dictionary[string,System.Collections.Generic.List[object]]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        $sharedPasswordTempEntries = [System.Collections.Generic.List[object]]::new()
+
+        $temporaryDirectoryPath = 'C:\Temp'
+        $sharedPasswordTempFilePath = Join-Path -Path $temporaryDirectoryPath -ChildPath 'PwndList.json'
+
+        $secureDeleteTempFile = {
+            param(
+                [Parameter(Mandatory)]
+                [string]$Path
+            )
+
+            if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+                return
+            }
+
+            try {
+                $fileInfo = Get-Item -LiteralPath $Path -ErrorAction Stop
+                $fileLength = $fileInfo.Length
+                if ($fileLength -gt 0) {
+                    $randomGenerator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+                    try {
+                        $buffer = New-Object byte[] $fileLength
+                        $randomGenerator.GetBytes($buffer)
+                        [System.IO.File]::WriteAllBytes($Path, $buffer)
+                    } finally {
+                        if ($randomGenerator -is [System.IDisposable]) {
+                            $randomGenerator.Dispose()
+                        }
+                    }
+                } else {
+                    [System.IO.File]::WriteAllText($Path, [string]::Empty)
+                }
+
+                [System.IO.File]::SetAttributes($Path, [System.IO.FileAttributes]::Normal)
+                Remove-Item -LiteralPath $Path -Force
+            } catch {
+                Write-Warning "Failed to securely delete temporary file '$Path': $_"
+            }
+        }
 
         $moduleRoot = Split-Path -Parent $PSScriptRoot
         $repoRoot = Split-Path -Parent $moduleRoot
@@ -690,32 +728,38 @@ function Get-PwnedADUserPassword {
                 if (-not $summaryDisplayName) { $summaryDisplayName = $account.Name }
                 if (-not $summaryDisplayName) { $summaryDisplayName = $account.SamAccountName }
 
-                    if ($seenCount -gt 0) {
-                        $compromisedSummary = [pscustomobject]@{
-                            AccountId      = $accountId
-                            DisplayName    = $summaryDisplayName
-                            SamAccountName = $account.SamAccountName
-                            Domain         = $adDomain
-                            SeenCount      = [int]$seenCount
-                        }
+                $trimmedHash = $null
+                if ($hashString -and -not [string]::IsNullOrWhiteSpace($hashString)) {
+                    $trimmedHash = $hashString.Trim()
+                }
 
-                        if ($hashString -and -not [string]::IsNullOrWhiteSpace($hashString)) {
-                            $trimmedHash = $hashString.Trim()
-                            if ($trimmedHash) {
-                                if (-not $sharedPasswordTracker.ContainsKey($trimmedHash)) {
-                                    $sharedPasswordTracker[$trimmedHash] = [System.Collections.Generic.List[object]]::new()
-                                }
+                if ($trimmedHash) {
+                    $tempRecord = [ordered]@{
+                        AccountId      = $accountId
+                        DisplayName    = $summaryDisplayName
+                        SamAccountName = $account.SamAccountName
+                        Domain         = $adDomain
+                        PasswordHash   = $trimmedHash
+                        SeenCount      = [int]$seenCount
+                    }
 
-                                $null = $sharedPasswordTracker[$trimmedHash].Add($compromisedSummary)
-                            }
-                        }
+                    [void]$sharedPasswordTempEntries.Add([pscustomobject]$tempRecord)
+                }
 
-                        if ($compromisedAccountSummaries.Contains($accountId)) {
-                            $compromisedAccountSummaries[$accountId] = $compromisedSummary
+                if ($seenCount -gt 0) {
+                    $compromisedSummary = [pscustomobject]@{
+                        AccountId      = $accountId
+                        DisplayName    = $summaryDisplayName
+                        SamAccountName = $account.SamAccountName
+                        Domain         = $adDomain
+                        SeenCount      = [int]$seenCount
+                    }
+
+                    if ($compromisedAccountSummaries.Contains($accountId)) {
+                        $compromisedAccountSummaries[$accountId] = $compromisedSummary
                     } else {
                         $compromisedAccountSummaries.Add($accountId, $compromisedSummary)
                     }
-
                 }
 
                 if ($notificationSettings -and $notificationSettings.NotifyManager -and ($seenCount -gt 0)) {
@@ -761,15 +805,69 @@ function Get-PwnedADUserPassword {
         $accountGroupMap = @{}
         $sharedPasswordGroups = @()
 
-        if ($sharedPasswordTracker -and ($sharedPasswordTracker.Count -gt 0)) {
-            $groupEntries = $sharedPasswordTracker.GetEnumerator() |
-                Where-Object { $_.Value.Count -gt 1 } |
-                Sort-Object -Property @{ Expression = { $_.Value.Count }; Descending = $true }, @{ Expression = { $_.Key } }
+        $sharedPasswordRecords = @()
+        if ($sharedPasswordTempEntries -and ($sharedPasswordTempEntries.Count -gt 0)) {
+            try {
+                if (-not (Test-Path -LiteralPath $temporaryDirectoryPath)) {
+                    New-Item -Path $temporaryDirectoryPath -ItemType Directory -Force | Out-Null
+                }
+
+                $jsonPayload = $sharedPasswordTempEntries | ConvertTo-Json -Depth 4
+                Set-Content -LiteralPath $sharedPasswordTempFilePath -Value $jsonPayload -Encoding UTF8 -Force
+
+                $fileContent = Get-Content -LiteralPath $sharedPasswordTempFilePath -Raw -ErrorAction Stop
+                if ($fileContent -and (-not [string]::IsNullOrWhiteSpace($fileContent))) {
+                    $sharedPasswordRecords = $fileContent | ConvertFrom-Json -ErrorAction Stop
+                } else {
+                    $sharedPasswordRecords = @()
+                }
+            } catch {
+                throw "Failed to create or read temporary shared password data at '$sharedPasswordTempFilePath': $_"
+            } finally {
+                if (Test-Path -LiteralPath $sharedPasswordTempFilePath) {
+                    & $secureDeleteTempFile -Path $sharedPasswordTempFilePath
+                }
+            }
+        } else {
+            if (Test-Path -LiteralPath $sharedPasswordTempFilePath) {
+                & $secureDeleteTempFile -Path $sharedPasswordTempFilePath
+            }
+        }
+
+        if ($sharedPasswordRecords) {
+            $recordsArray = @($sharedPasswordRecords)
+
+            $hashGroups = $recordsArray |
+                Where-Object { $_ -and $_.PasswordHash -and -not [string]::IsNullOrWhiteSpace($_.PasswordHash) } |
+                Group-Object -Property PasswordHash |
+                Where-Object { $_.Count -gt 1 } |
+                Sort-Object -Property @{ Expression = { $_.Count }; Descending = $true }, @{ Expression = { $_.Name } }
 
             $groupIndex = 1
-            foreach ($groupEntry in $groupEntries) {
-                $accountsInGroup = @($groupEntry.Value)
-                if (-not $accountsInGroup) { continue }
+            foreach ($hashGroup in $hashGroups) {
+                $accountsInGroup = @()
+                foreach ($record in @($hashGroup.Group)) {
+                    if (-not $record) { continue }
+
+                    $accountSummary = $null
+                    if ($record.AccountId -and $compromisedAccountSummaries -and $compromisedAccountSummaries.Contains($record.AccountId)) {
+                        $accountSummary = $compromisedAccountSummaries[$record.AccountId]
+                    }
+
+                    if (-not $accountSummary) {
+                        $accountSummary = [pscustomobject]@{
+                            AccountId      = $record.AccountId
+                            DisplayName    = $record.DisplayName
+                            SamAccountName = $record.SamAccountName
+                            Domain         = $record.Domain
+                            SeenCount      = [int]$record.SeenCount
+                        }
+                    }
+
+                    $accountsInGroup += $accountSummary
+                }
+
+                if ($accountsInGroup.Count -lt 2) { continue }
 
                 $groupId = "Shared Password Group $groupIndex"
                 $groupIndex++
@@ -778,7 +876,7 @@ function Get-PwnedADUserPassword {
                     if (-not $accountSummary) { continue }
 
                     if ($accountSummary.PSObject.Properties['SharedPasswordGroupId']) {
-                        $accountSummary.PSObject.Properties['SharedPasswordGroupId'].Value = $groupId
+                        $accountSummary.SharedPasswordGroupId = $groupId
                     } else {
                         $accountSummary | Add-Member -NotePropertyName 'SharedPasswordGroupId' -NotePropertyValue $groupId
                     }
