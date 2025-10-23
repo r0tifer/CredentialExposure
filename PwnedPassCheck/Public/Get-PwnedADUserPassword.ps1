@@ -934,7 +934,7 @@ function Get-PwnedADUserPassword {
             if (-not $managerRecipients) {
                 Write-Warning 'Manager notifications are enabled, but no manager email addresses were provided in ManagersToNotify.'
             } elseif (-not $managerSummaryRecords) {
-                Write-Verbose 'No compromised accounts require manager notification at this time.'
+                Write-Verbose 'No unsafe accounts require manager notification at this time.'
             } else {
                 $nowUtc = (Get-Date).ToUniversalTime()
                 $minimumInterval = switch ($notificationSettings.ReportingFrequency) {
@@ -1045,7 +1045,7 @@ function Get-PwnedADUserPassword {
 
         Write-Host ''
         if ($totalCompromisedCount -gt 0) {
-            Write-Host 'unsafe Accounts' -ForegroundColor Yellow
+            Write-Host 'Unsafe Accounts' -ForegroundColor Yellow
             Write-Host ('-' * 80)
             foreach ($account in ($compromisedAccounts | Sort-Object DisplayName, SamAccountName)) {
                 $label = & $formatAccountForDisplay $account
@@ -1057,7 +1057,7 @@ function Get-PwnedADUserPassword {
                 Write-Host " - $label$seenCountSuffix"
             }
         } else {
-            Write-Host 'Compromised Accounts' -ForegroundColor Yellow
+            Write-Host 'Unsafe Accounts' -ForegroundColor Yellow
             Write-Host ('-' * 80)
             Write-Host ' - None detected.'
         }

@@ -125,7 +125,7 @@ function Send-PwnedManagerNotification {
     [void]$builder.AppendLine("<li><strong>Total accounts sharing passwords:</strong> $sharedAccountCount</li>")
     [void]$builder.AppendLine('</ul>')
 
-    [void]$builder.AppendLine('<h2>unsafe Accounts</h2>')
+    [void]$builder.AppendLine('<h2>Unsafe Accounts</h2>')
     if ($sortedRecords) {
         [void]$builder.AppendLine('<ul>')
         foreach ($record in $sortedRecords) {
