@@ -96,8 +96,9 @@ Running the audit once and relying on manual follow-up defeats the purpose of au
 
 **Build or obtain the service binary**
    - The PowerShell module delivered by `instdev.ps1` does **not** include the compiled Windows service executable. Either download a pre-built release or publish it yourself.
-   - From the repo root, run `dotnet publish .\Service\PwnedPassCheckService.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true`.
-   - The compiled binaries land under `Service\bin\Release\net6.0-windows\win-x64\publish`.
+   - If you used `instdev.ps1`, the source lives under `C:\PwndPassCheck\Service`; run `dotnet publish .\PwnedPassCheckService.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true` from that folder.
+   - When working from a cloned repository, run `dotnet publish .\Service\PwnedPassCheckService.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true` at the repo root.
+   - The compiled binaries land under the project's `bin\Release\net6.0-windows\win-x64\publish` directory.
 
 **Deploy the payload**
    - Create a target folder such as `C:\Program Files\PwnedPassCheckService`.

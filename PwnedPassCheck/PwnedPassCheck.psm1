@@ -71,6 +71,7 @@ $script:DefaultSettingsPath = Join-Path -Path $script:DefaultDataDirectory -Chil
 $script:DefaultAuditLogPath = Join-Path -Path $script:DefaultDataDirectory -ChildPath 'PwnedPassCheckAuditLog.json'
 $script:DefaultServiceRunnerPath = Join-Path -Path $script:DefaultDataDirectory -ChildPath 'PwnedPassCheckServiceRunner.ps1'
 $script:DefaultServiceAppSettingsPath = Join-Path -Path $script:DefaultDataDirectory -ChildPath 'appsettings.json'
+$script:DefaultServiceProjectPath = Join-Path -Path $script:DefaultDataDirectory -ChildPath 'Service'
 
 function Initialize-PwnedPassCheckDataEnvironment {
     $status = [pscustomobject]@{
@@ -87,6 +88,10 @@ function Initialize-PwnedPassCheckDataEnvironment {
         ServiceAppSettingsPath = $script:DefaultServiceAppSettingsPath
         ServiceAppSettingsCopied = $false
         ServiceAppSettingsSource = $null
+        ServiceProjectPath     = $script:DefaultServiceProjectPath
+        ServiceProjectCopied   = $false
+        ServiceProjectSource   = $null
+        ServiceProjectPresent  = Test-Path -Path $script:DefaultServiceProjectPath -PathType Container
     }
 
     if (-not (Test-Path -Path $script:DefaultDataDirectory)) {
@@ -226,6 +231,29 @@ function Initialize-PwnedPassCheckDataEnvironment {
         }
     } elseif (-not (Test-Path -Path $script:DefaultServiceAppSettingsPath)) {
         Write-Warning "Unable to locate a template for 'appsettings.json'. Ensure the module includes the service assets."
+    }
+
+    $serviceProjectCandidates = @(
+        (Join-Path -Path $script:RepoRoot -ChildPath 'Service'),
+        (Join-Path -Path $script:ModuleRoot -ChildPath 'Service')
+    ) | Where-Object {
+        $_ -and (Test-Path -Path $_ -PathType Container) -and (Test-Path -Path (Join-Path -Path $_ -ChildPath 'PwnedPassCheckService.csproj'))
+    }
+
+    if ($serviceProjectCandidates) {
+        $status.ServiceProjectSource = $serviceProjectCandidates | Select-Object -First 1
+
+        if (-not $status.ServiceProjectPresent) {
+            try {
+                Copy-Item -Path $status.ServiceProjectSource -Destination $script:DefaultServiceProjectPath -Recurse -Force
+                $status.ServiceProjectCopied = $true
+                $status.ServiceProjectPresent = $true
+            } catch {
+                throw "Failed to copy service project from '$($status.ServiceProjectSource)' to '$($script:DefaultServiceProjectPath)': $_"
+            }
+        }
+    } elseif (-not $status.ServiceProjectPresent) {
+        Write-Warning "Unable to locate the service project. Clone the repository to access the Windows service source."
     }
 
     return $status

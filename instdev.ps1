@@ -14,6 +14,68 @@ if ('PSEdition' -notin $PSVersionTable.Keys -or $PSVersionTable.PSEdition -eq 'D
 # create user-specific modules folder if it doesn't exist
 New-Item -ItemType Directory -Force -Path $installpath | out-null
 
+function Get-PwnedPassCheckDefaultDirectory {
+    $systemDrive = $env:SystemDrive
+    if (-not $systemDrive -and $IsWindows) {
+        try {
+            $systemDirectory = [Environment]::SystemDirectory
+            if ($systemDirectory) {
+                $systemDrive = Split-Path -Path $systemDirectory -Qualifier
+            }
+        } catch {
+            $systemDrive = $null
+        }
+    }
+
+    if ($systemDrive) {
+        return Join-Path -Path $systemDrive -ChildPath 'PwndPassCheck'
+    }
+
+    if ($HOME) {
+        return Join-Path -Path $HOME -ChildPath 'PwndPassCheck'
+    }
+
+    return Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'PwndPassCheck'
+}
+
+function Copy-PwnedPassCheckServiceProject {
+    param(
+        [Parameter(Mandatory)]
+        [string]$SourceRoot
+    )
+
+    $serviceSource = Join-Path -Path $SourceRoot -ChildPath 'Service'
+    if (-not (Test-Path -Path $serviceSource -PathType Container)) {
+        return
+    }
+
+    if (-not (Test-Path -Path (Join-Path -Path $serviceSource -ChildPath 'PwnedPassCheckService.csproj'))) {
+        return
+    }
+
+    $dataDirectory = Get-PwnedPassCheckDefaultDirectory
+    if (-not (Test-Path -Path $dataDirectory -PathType Container)) {
+        New-Item -Path $dataDirectory -ItemType Directory -Force | Out-Null
+    }
+
+    $destination = Join-Path -Path $dataDirectory -ChildPath 'Service'
+    if (Test-Path -Path $destination -PathType Container) {
+        Write-Host "Service project already present at '$destination'." -ForegroundColor DarkGray
+        return
+    }
+
+    Copy-Item -Path $serviceSource -Destination $destination -Recurse -Force
+
+    foreach ($buildFolder in @('bin', 'obj', '.vs')) {
+        $buildPath = Join-Path -Path $destination -ChildPath $buildFolder
+        if (Test-Path -Path $buildPath -PathType Container) {
+            Remove-Item -Path $buildPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    Write-Host "Copied service project to '$destination'." -ForegroundColor Green
+}
+
 if ([String]::IsNullOrWhiteSpace($PSScriptRoot)) {
     # likely running from online
 
@@ -57,12 +119,14 @@ if ([String]::IsNullOrWhiteSpace($PSScriptRoot)) {
     }
     Write-Host "Copying module from $sourceModulePath" -ForegroundColor Cyan
     Copy-Item $sourceModulePath $installpath -Recurse -Force
+    Copy-PwnedPassCheckServiceProject -SourceRoot $extractedRoot.FullName
     Remove-Item $extractedRoot.FullName -Recurse -Force -Confirm:$false -EA SilentlyContinue
     Import-Module -Name PwnedPassCheck -Force
 } else {
     # running locally
     Remove-Item "$installpath\PwnedPassCheck" -Recurse -Force -EA SilentlyContinue
     Copy-Item "$PSScriptRoot\PwnedPassCheck" $installpath -Recurse -Force
+    Copy-PwnedPassCheckServiceProject -SourceRoot $PSScriptRoot
     # force re-load the module (assuming you're editing locally and want to see changes)
     Import-Module -Name PwnedPassCheck -Force
 }
@@ -109,6 +173,16 @@ try {
             Write-Host "Copied default service settings to '$($environmentStatus.ServiceAppSettingsPath)'." -ForegroundColor Green
         } elseif (Test-Path -Path $environmentStatus.ServiceAppSettingsPath) {
             Write-Host "Service settings already present at '$($environmentStatus.ServiceAppSettingsPath)'." -ForegroundColor DarkGray
+        }
+    }
+
+    if ($environmentStatus.ServiceProjectPath) {
+        if ($environmentStatus.ServiceProjectCopied) {
+            Write-Host "Copied service project to '$($environmentStatus.ServiceProjectPath)'." -ForegroundColor Green
+        } elseif ($environmentStatus.ServiceProjectPresent) {
+            Write-Host "Service project already present at '$($environmentStatus.ServiceProjectPath)'." -ForegroundColor DarkGray
+        } else {
+            Write-Warning "Service project not found at '$($environmentStatus.ServiceProjectPath)'."
         }
     }
 
