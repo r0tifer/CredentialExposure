@@ -1,0 +1,52 @@
+@{ 
+    # HIBPApiKey: Provide the 32-character hexadecimal API key issued by Have I Been Pwned for authenticated API requests.
+    HIBPApiKey = ""
+
+    # HIBPUserAgent: Provide the contact email address or descriptive user agent required by the HIBP API terms.
+    HIBPUserAgent = ""
+
+    # AD Domain: Provide the fully qualified domain name (FQDN) for your Active Directory environment (e.g., corp.example.com).
+    ADDomain = "corp.example.com"
+
+    # Domain Controllers: Provide one or more fully qualified domain controller hostnames separated by commas (e.g., "dc1.corp.example.com, dc2.corp.example.com").
+    DomainControllers = "dc1.corp.example.com"
+
+    # Notify User: Set to $true to email affected users when their password is compromised; otherwise set to $false.
+    NotifyUser = $false
+
+    # Notify Manager: Set to $true to notify the user's manager about compromised passwords; otherwise set to $false.
+    NotifyManager = $false
+
+    # ManagersToNotify: (Optional) Additional manager email addresses to receive alerts, separated by commas. Leave blank to disable.
+    ManagersToNotify = ""
+
+    # HIBPApiRoot: (Optional) Override the Have I Been Pwned Pwned Passwords API endpoint. Leave blank to use the module default.
+    HIBPApiRoot = ""
+
+    # HIBPRequestPadding: Set to $true to request padded API responses for additional privacy; otherwise set to $false.
+    HIBPRequestPadding = $false
+
+    # HIBPNoModeQueryString: Set to $true to prevent the mode=ntlm query string from being added when checking NTLM hashes.
+    HIBPNoModeQueryString = $false
+
+    # ReportingFrequency: Set to 'Weekly' or 'Monthly' to control how often manager summary emails are sent when NotifyManager is $true.
+    ReportingFrequency = ""
+
+    # SmtpServer: (Required when NotifyUser or NotifyManager is $true) Host name or IP address of the SMTP server used to send notifications.
+    SmtpServer = ""
+
+    # FromAddress: (Required when NotifyUser or NotifyManager is $true) Email address that will appear in the From field of notifications.
+    FromAddress = ""
+
+    # EmailUserAccount: (Required when NotifyUser or NotifyManager is $true) Username or email of the account used to send notifications.
+    EmailUserAccount = ""
+
+    # EmailUserPassword: (Required when NotifyUser or NotifyManager is $true) Password for the notification email account.
+    EmailUserPassword = ""
+
+    # SendingPort: (Required when NotifyUser or NotifyManager is $true) SMTP port number used for sending notifications (e.g., 25, 465, 587).
+    SendingPort = ""
+
+    # EncryptionType: (Required when NotifyUser or NotifyManager is $true) Accepted values: 'None', 'StartTLS', or 'SSL/TLS'.
+    EncryptionType = ""
+}

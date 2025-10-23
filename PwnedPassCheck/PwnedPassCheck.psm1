@@ -1,0 +1,184 @@
+#Requires -Version 3.0
+
+# Get public and private function definition files.
+$Public  = @( Get-ChildItem -Path $PSScriptRoot\Public\*.ps1 -ErrorAction SilentlyContinue )
+$Private = @( Get-ChildItem -Path $PSScriptRoot\Private\*.ps1 -ErrorAction SilentlyContinue )
+
+# Dot source the files
+foreach ($import in @($Public + $Private))
+{
+    try { . $import.fullname }
+    catch {
+        Write-Error -Message "Failed to import function $($import.fullname): $_"
+    }
+}
+
+# Define common parameters for Invoke-WebRequest
+$script:IWR_PARAMS = @{
+    UserAgent = "PwnedPassCheck/3.0.0 PowerShell/$($PSVersionTable.PSVersion)"
+    ErrorAction = 'Stop'
+}
+
+# Invoke-WebRequest in Windows PowerShell uses IE's DOM parser by default which
+# can cause errors if IE is not installed or hasn't gone through the first-run
+# sequence in a new profile. The -UseBasicParsing switch makes it use a PowerShell
+# native parser instead and avoids those problems. In PowerShell Core 6+, the
+# parameter has been deprecated because there is no IE DOM parser to use and all
+# requests use the native parser by default. In order to future proof ourselves
+# for the switch's eventual removal, we'll set it only if it actually exists.
+if ('UseBasicParsing' -in (Get-Command Invoke-WebRequest).Parameters.Keys) {
+    $script:IWR_PARAMS.UseBasicParsing = $true
+}
+
+if ('SslProtocol' -notin (Get-Command Invoke-WebRequest).Parameters.Keys) {
+    # make sure we have recent TLS versions enabled for Desktop edition
+    $currentMaxTls = [Math]::Max([Net.ServicePointManager]::SecurityProtocol.value__,[Net.SecurityProtocolType]::Tls.value__)
+    $newTlsTypes = [enum]::GetValues('Net.SecurityProtocolType') | Where-Object { $_ -gt $currentMaxTls }
+    $newTlsTypes | ForEach-Object {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor $_
+    }
+}
+
+$script:ModuleRoot = $PSScriptRoot
+$script:RepoRoot = Split-Path -Parent $script:ModuleRoot
+
+function Get-PwnedPassCheckDefaultDirectory {
+    $systemDrive = $env:SystemDrive
+    if (-not $systemDrive -and $IsWindows) {
+        try {
+            $systemDirectory = [Environment]::SystemDirectory
+            if ($systemDirectory) {
+                $systemDrive = Split-Path -Path $systemDirectory -Qualifier
+            }
+        } catch {
+            $systemDrive = $null
+        }
+    }
+
+    if ($systemDrive) {
+        return Join-Path -Path $systemDrive -ChildPath 'PwndPassCheck'
+    }
+
+    if ($HOME) {
+        return Join-Path -Path $HOME -ChildPath 'PwndPassCheck'
+    }
+
+    return Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'PwndPassCheck'
+}
+
+$script:DefaultDataDirectory = Get-PwnedPassCheckDefaultDirectory
+$script:DefaultSettingsPath = Join-Path -Path $script:DefaultDataDirectory -ChildPath 'PwnedPassCheckSettings.psd1'
+$script:DefaultAuditLogPath = Join-Path -Path $script:DefaultDataDirectory -ChildPath 'PwnedPassCheckAuditLog.json'
+
+function Initialize-PwnedPassCheckDataEnvironment {
+    $status = [pscustomobject]@{
+        DataDirectoryCreated   = $false
+        SettingsFileCreated    = $false
+        AuditLogCreated        = $false
+        DataDirectory          = $script:DefaultDataDirectory
+        SettingsPath           = $script:DefaultSettingsPath
+        AuditLogPath           = $script:DefaultAuditLogPath
+        SettingsTemplateSource = $null
+    }
+
+    if (-not (Test-Path -Path $script:DefaultDataDirectory)) {
+        try {
+            New-Item -Path $script:DefaultDataDirectory -ItemType Directory -Force | Out-Null
+            $status.DataDirectoryCreated = $true
+        } catch {
+            throw "Unable to create the data directory '$($script:DefaultDataDirectory)': $_"
+        }
+    }
+
+    if (-not (Test-Path -Path $script:DefaultSettingsPath)) {
+        $templateCandidates = @(
+            (Join-Path -Path $script:RepoRoot -ChildPath 'PwnedPassCheckSettings.psd1'),
+            (Join-Path -Path $script:ModuleRoot -ChildPath 'PwnedPassCheckSettings.psd1')
+        ) | Where-Object { $_ -and (Test-Path -Path $_) }
+
+        if ($templateCandidates) {
+            $templateSource = $templateCandidates | Select-Object -First 1
+            try {
+                Copy-Item -Path $templateSource -Destination $script:DefaultSettingsPath -Force
+                $status.SettingsTemplateSource = $templateSource
+            } catch {
+                throw "Failed to copy default settings file from '$templateSource' to '$($script:DefaultSettingsPath)': $_"
+            }
+        } else {
+            try {
+                $defaultSettingsContent = @'
+@{
+    # HIBPApiKey: Provide the 32-character hexadecimal API key issued by Have I Been Pwned for authenticated API requests.
+    HIBPApiKey = ""
+
+    # HIBPUserAgent: Provide the contact email address or descriptive user agent required by the HIBP API terms.
+    HIBPUserAgent = ""
+
+    # AD Domain: Provide the fully qualified domain name (FQDN) for your Active Directory environment (e.g., corp.example.com).
+    ADDomain = "corp.example.com"
+
+    # Domain Controllers: Provide one or more fully qualified domain controller hostnames separated by commas (e.g., "dc1.corp.example.com, dc2.corp.example.com").
+    DomainControllers = "dc1.corp.example.com"
+
+    # Notify User: Set to $true to email affected users when their password is compromised; otherwise set to $false.
+    NotifyUser = $false
+
+    # Notify Manager: Set to $true to notify the user's manager about compromised passwords; otherwise set to $false.
+    NotifyManager = $false
+
+    # ManagersToNotify: (Optional) Additional manager email addresses to receive alerts, separated by commas. Leave blank to disable.
+    ManagersToNotify = ""
+
+    # HIBPApiRoot: (Optional) Override the Have I Been Pwned Pwned Passwords API endpoint. Leave blank to use the module default.
+    HIBPApiRoot = ""
+
+    # HIBPRequestPadding: Set to $true to request padded API responses for additional privacy; otherwise set to $false.
+    HIBPRequestPadding = $false
+
+    # HIBPNoModeQueryString: Set to $true to prevent the mode=ntlm query string from being added when checking NTLM hashes.
+    HIBPNoModeQueryString = $false
+
+    # ReportingFrequency: Set to 'Weekly' or 'Monthly' to control how often manager summary emails are sent when NotifyManager is $true.
+    ReportingFrequency = ""
+
+    # SmtpServer: (Required when NotifyUser or NotifyManager is $true) Host name or IP address of the SMTP server used to send notifications.
+    SmtpServer = ""
+
+    # FromAddress: (Required when NotifyUser or NotifyManager is $true) Email address that will appear in the From field of notifications.
+    FromAddress = ""
+
+    # EmailUserAccount: (Required when NotifyUser or NotifyManager is $true) Username or email of the account used to send notifications.
+    EmailUserAccount = ""
+
+    # EmailUserPassword: (Required when NotifyUser or NotifyManager is $true) Password for the notification email account.
+    EmailUserPassword = ""
+
+    # SendingPort: (Required when NotifyUser or NotifyManager is $true) SMTP port number used for sending notifications (e.g., 25, 465, 587).
+    SendingPort = ""
+
+    # EncryptionType: (Required when NotifyUser or NotifyManager is $true) Accepted values: 'None', 'StartTLS', or 'SSL/TLS'.
+    EncryptionType = ""
+}
+'@
+                $defaultSettingsContent | Set-Content -Path $script:DefaultSettingsPath -Encoding UTF8
+            } catch {
+                throw "Failed to create default settings file at '$($script:DefaultSettingsPath)': $_"
+            }
+        }
+
+        $status.SettingsFileCreated = $true
+    }
+
+    if (-not (Test-Path -Path $script:DefaultAuditLogPath)) {
+        try {
+            $emptyEntries = New-Object System.Collections.Specialized.OrderedDictionary
+            $emptyMetadata = New-Object System.Collections.Specialized.OrderedDictionary
+            Export-PwnedAuditLog -Path $script:DefaultAuditLogPath -Entries $emptyEntries -Metadata $emptyMetadata | Out-Null
+            $status.AuditLogCreated = $true
+        } catch {
+            throw "Failed to create default audit log at '$($script:DefaultAuditLogPath)': $_"
+        }
+    }
+
+    return $status
+}
