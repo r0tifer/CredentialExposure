@@ -1045,7 +1045,7 @@ function Get-PwnedADUserPassword {
 
         Write-Host ''
         if ($totalCompromisedCount -gt 0) {
-            Write-Host 'Compromised Accounts' -ForegroundColor Yellow
+            Write-Host 'unsafe Accounts' -ForegroundColor Yellow
             Write-Host ('-' * 80)
             foreach ($account in ($compromisedAccounts | Sort-Object DisplayName, SamAccountName)) {
                 $label = & $formatAccountForDisplay $account
