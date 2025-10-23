@@ -81,11 +81,11 @@ When notifications are enabled in the settings file:
 * **User notifications** are sent the first time (and then at most once per day) the module finds a compromised password. The email includes guidance for resetting the password via **Ctrl+Alt+Del**, the date of discovery, and the total number of alerts sent.
 * **Manager notifications** summarise exposure counts, last notification timestamps, and whether users have remediated their passwords. Reports can be generated weekly or monthly based on the `ReportingFrequency` setting.
 
-Both notification types use the SMTP settings in the configuration file. Supply credentials for an account authorised to send emails on behalf of your security team, and verify any required TLS settings match your mail gateway.
+Both notification types use the SMTP settings in the configuration file. Supply credentials for an account authorised to send emails on behalf of your security team, and verify that any required TLS settings match your mail gateway.
 
 # Automate daily checks and 1 PM notifications
 
-Running the audit once and relying on manual follow-up defeats the purpose of automated remediation. Use a scheduled task to run `Get-PwnedADUserPassword` every day at **1:00 PM** so compromised accounts are detected and notifications are sent promptly.
+Running the audit once and relying on manual follow-up defeats the purpose of automated remediation. Get-Pwnd-PassCheck can run as a Windows Service or a scheduled task, automatically executing `Get-PwnedADUserPassword` every day at **1:00 PM** (or the configured frequency in PwndPassCheckSettings.psd1) to detect unsafe accounts and send notifications promptly.
 
 ## Run Get-Pwnd-PassCheck as a Windows service
 
