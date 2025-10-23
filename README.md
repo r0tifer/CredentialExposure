@@ -20,21 +20,8 @@ Get-Pwnd-PassCheck extends the original [PwnedPassCheck](https://github.com/rmbo
 ## Installation
 
 ### Latest release
-
-Install the stable version from the PowerShell Gallery or from the latest GitHub release.
-
-```powershell
-# Install for all users (requires elevated privileges)
-Install-Module -Name PwnedPassCheck -Scope AllUsers
-
-# Install for the current user only
-Install-Module -Name PwnedPassCheck -Scope CurrentUser
-```
-
-### Development build
 Install the main-branch build directly from this repository if you want the latest updates.
 
-Check passwords and hashes against the [haveibeenpwned.com](https://haveibeenpwned.com) [Pwned Passwords API](https://haveibeenpwned.com/API/v3#PwnedPasswords) using PowerShell. Also supports third party equivalent APIs.
 ```powershell
 # (optional) loosen execution policy
 Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
@@ -51,7 +38,7 @@ iex (irm https://raw.githubusercontent.com/r0tifer/Get-Pwnd-PassCheck/main/instd
 
 ## Configure the module
 
-1. Update the default configuration file created at `C:\PwndPassCheck\PwnedPassCheckSettings.psd1` (the module generates it the first time you run a command) or copy the template from the repository root and adjust the values:
+1. Update the default configuration file created at `C:\PwndPassCheck\PwnedPassCheckSettings.psd1` (the module generates on first run):
    * `DomainName`, `DomainControllers`, and `BaseDN` for your Active Directory environment.
    * `HIBPApiKey` and `HIBPUserAgent` with the credentials issued to your organisation.
    * `NotifyUser` / `NotifyManager` toggles plus SMTP settings when you want email alerts.
@@ -71,7 +58,7 @@ Import-Module DSInternals
 # Run the audit using the configured settings
 $results = Get-PwnedADUserPassword -Verbose
 
-# Filter to compromised accounts
+# Filter to detected accounts
 $results | Where-Object IsPwned
 ```
 
@@ -96,50 +83,46 @@ When notifications are enabled in the settings file:
 
 Both notification types use the SMTP settings in the configuration file. Supply credentials for an account authorised to send emails on behalf of your security team, and verify any required TLS settings match your mail gateway.
 
-## Automate daily checks and 1 PM notifications
+# Automate daily checks and 1 PM notifications
 
 Running the audit once and relying on manual follow-up defeats the purpose of automated remediation. Use a scheduled task to run `Get-PwnedADUserPassword` every day at **1:00 PM** so compromised accounts are detected and notifications are sent promptly.
 
-### 1. Create an execution script
+## Run Get-Pwnd-PassCheck as a Windows service
 
-Save the following as `C:\Scripts\Run-PwnedPasswordAudit.ps1` (adjust paths to match your deployment):
+**Publish the worker service**
+   - From the repo root, run `dotnet publish .\Service\PwnedPassCheckService.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true`.
+   - The compiled binaries land under `Service\bin\Release\net6.0-windows\win-x64\publish`.
 
-```powershell
-Import-Module PwnedPassCheck
-Import-Module DSInternals
+**Deploy the payload**
+   - Create a target folder such as `C:\Program Files\PwnedPassCheckService`.
+   - Copy the entire contents of the `publish` directory (including `appsettings.json` and `PwnedPassCheckServiceRunner.ps1`) into that folder.
 
-$settingsPath = 'C:\SecureConfig\PwnedPassCheckSettings.psd1'
-$auditLogPath = 'C:\Logs\PwnedPassCheckAuditLog.json'
+**Edit the service settings**
+   - Open `C:\Program Files\PwnedPassCheckService\appsettings.json`.
+   - Set `Service:PwshPath` to the full path of `pwsh.exe` (use `powershell.exe` if PowerShell 5.1 is required).
+   - Point `Service:ServiceScriptPath` to the installed `PwnedPassCheckServiceRunner.ps1` or another wrapper script if you customise it.
+   - Fill in `Service:SettingsPath` and `Service:AuditLogPath` with the same paths you use when running the module interactively.
+   - Adjust `Service:RunIntervalMinutes` to the cadence you want (minimum 5, default 30) and flip `Verbose` to `true` if you want detailed logging.
 
-$results = Get-PwnedADUserPassword -SettingsPath $settingsPath -AuditLogPath $auditLogPath -Verbose
-$results | Where-Object IsPwned | Out-File -FilePath 'C:\Logs\PwnedPassCheckLatest.txt'
-```
+**Confirm the runner script**
+   - Update `PwnedPassCheckServiceRunner.ps1` if you need additional parameters or preprocessing.
+   - Confirm the service account has access to the `PwnedPassCheck` and `DSInternals` modules and to the configuration/audit paths.
 
-The sample script loads the module, runs the audit with explicit settings/audit log paths, and records the latest list of exposed accounts. Because notification throttling is handled internally, running the task daily will only email users or managers when new activity occurs or the throttle window has expired.
+**Register the Windows service (elevated PowerShell)**
+   - `$serviceExe = 'C:\Program Files\PwnedPassCheckService\PwnedPassCheckService.exe'`
+   - `New-Service -Name 'PwnedPassCheckService' -BinaryPathName "`"$serviceExe`"" -DisplayName 'Pwned Password Auditor' -Description 'Runs Get-PwnedADUserPassword on a fixed interval.' -StartupType Automatic -Credential (Get-Credential)`
+   - `sc.exe failure PwnedPassCheckService reset= 86400 actions= restart/60000/restart/60000/""/0` (optional: auto-restart on failure)
 
-### 2. Register a scheduled task that runs daily at 1:00 PM
+**Start and validate**
+   - `Start-Service PwnedPassCheckService`
+   - Check `Get-Service PwnedPassCheckService` for `Running`.
+   - Review `Get-WinEvent -LogName Application -ProviderName 'PwnedPassCheckService' -MaxEvents 20` for status messages.
+   - Confirm the audit log and notification outputs update on the configured interval.
 
-Run the following commands from an elevated PowerShell session on the server that will host the automation. Replace the account details with a dedicated service account that has permission to replicate directory data and send mail.
-
-```powershell
-$action = New-ScheduledTaskAction -Execute 'pwsh.exe' `
-    -Argument '-NoProfile -ExecutionPolicy Bypass -File "C:\Scripts\Run-PwnedPasswordAudit.ps1"'
-
-$trigger = New-ScheduledTaskTrigger -Daily -At 1:00PM
-
-$principal = New-ScheduledTaskPrincipal -UserId 'CONTOSO\Svc-PwnedAudit' -LogonType Password -RunLevel Highest
-
-Register-ScheduledTask -TaskName 'Pwned Password Audit' -Action $action -Trigger $trigger `
-    -Principal $principal -Description 'Runs Get-PwnedADUserPassword daily and sends notifications at 1 PM.'
-```
-
-If the system only has Windows PowerShell, replace `pwsh.exe` with `powershell.exe`. After registration, supply the service account password when prompted. Confirm the task history to ensure it runs successfully and that emails arrive around 1 PM each day.
-
-### 3. Validate the scheduled run
-
-* Review `C:\Logs\PwnedPassCheckLatest.txt` and `PwnedPassCheckAuditLog.json` for new entries after the first run.
-* Check the SMTP relay logs (or mailboxes) to ensure users and managers receive notifications when applicable.
-* Periodically rerun `Get-PwnedAuditLog` manually to confirm password changes are being recorded.
+**Operational tips**
+   - Use `Restart-Service PwnedPassCheckService` after any config or script change.
+   - Rotate the service account password and reapply with `sc.exe config PwnedPassCheckService obj= "DOMAIN\Svc-Pwned" password= "NewPassword"` when required.
+   - Keep the PowerShell modules patched and re-publish the service after repo updates.
 
 ## Quick start: ad-hoc password checks
 
