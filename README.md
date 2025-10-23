@@ -90,17 +90,19 @@ Running the audit once and relying on manual follow-up defeats the purpose of au
 ## Run Get-Pwnd-PassCheck as a Windows service
 
 **Service layout**
-   - The worker service always loads configuration from `C:\PwndPassCheck\appsettings.json` and executes `C:\PwndPassCheck\PwnedPassCheckServiceRunner.ps1`. Keep every runtime asset (settings file, audit log, runner script) in that directory unless you explicitly reconfigure them in `appsettings.json`.
-   - Running `instdev.ps1` on the service host seeds `C:\PwndPassCheck` with `appsettings.json`, `PwnedPassCheckServiceRunner.ps1`, the module settings file, and an empty audit log so the Windows service can start immediately after publishing the binaries.
-   - If you regenerate or customise the service files, update the copies under `C:\PwndPassCheck` as well as the templates in `PwnedPassCheck\Service\` so future installs stay in sync.
+   - Always run `instdev.ps1` on the machine that will host the Windows service. This installs the PowerShell module and seeds `C:\PwndPassCheck` with everything the worker expects (`appsettings.json`, `PwnedPassCheckServiceRunner.ps1`, the module settings file, and an empty audit log).
+   - The worker service loads configuration exclusively from `C:\PwndPassCheck\appsettings.json` and executes `C:\PwndPassCheck\PwnedPassCheckServiceRunner.ps1`. Keep every runtime asset (settings file, audit log, runner script) in that directory unless you explicitly reconfigure them in `appsettings.json`.
+   - If you customise any of those files, update both the live copies under `C:\PwndPassCheck` and the templates in `PwnedPassCheck\Service\` so future installs stay in sync.
 
-**Publish the worker service**
+**Build or obtain the service binary**
+   - The PowerShell module delivered by `instdev.ps1` does **not** include the compiled Windows service executable. Either download a pre-built release or publish it yourself.
    - From the repo root, run `dotnet publish .\Service\PwnedPassCheckService.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true`.
    - The compiled binaries land under `Service\bin\Release\net6.0-windows\win-x64\publish`.
 
 **Deploy the payload**
    - Create a target folder such as `C:\Program Files\PwnedPassCheckService`.
-   - Copy the entire contents of the `publish` directory into that folder. Do **not** move `appsettings.json` or `PwnedPassCheckServiceRunner.ps1` out of `C:\PwndPassCheck`; the service reads them in place from that directory.
+   - Copy the entire contents of the `publish` directory into that folder. These files include `PwnedPassCheckService.exe` and companions for running as a Windows service.
+   - Do **not** move `appsettings.json` or `PwnedPassCheckServiceRunner.ps1` out of `C:\PwndPassCheck`; the service reads the live configuration and scripts from that directory. If you overwrite them during publishing, rerun `instdev.ps1` to reseed or copy your customised versions back into place.
 
 **Edit the service settings**
    - Update `C:\PwndPassCheck\appsettings.json` before registering the service. The worker reloads changes automatically while running.
