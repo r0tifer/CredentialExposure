@@ -19,6 +19,7 @@ FunctionsToExport = @(
     'Test-PwnedHash'
     'Test-PwnedHashBytes'
     'Test-PwnedPassword'
+    'New-PwnedNotificationPasswordSecret'
     'Update-PwnedAuditLog'
 )
 
