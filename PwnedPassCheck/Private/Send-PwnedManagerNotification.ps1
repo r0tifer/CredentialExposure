@@ -127,7 +127,10 @@ function Send-PwnedManagerNotification {
 
     [void]$builder.AppendLine('<h2>Unsafe Accounts</h2>')
     if ($sortedRecords) {
-        [void]$builder.AppendLine('<ul>')
+        [void]$builder.AppendLine('<table role="presentation">')
+        [void]$builder.AppendLine('<thead><tr><th scope="col">User Account</th><th scope="col">Last User Notification</th><th scope="col">Password Changed?</th></tr></thead>')
+        [void]$builder.AppendLine('<tbody>')
+
         foreach ($record in $sortedRecords) {
             $accountId = $record.AccountId
             $userCell = $null
@@ -137,9 +140,38 @@ function Send-PwnedManagerNotification {
                 $userCell = & $buildUserCell $record
             }
 
-            [void]$builder.AppendLine("<li>$userCell</li>")
+            $userNotificationText = 'No notification sent'
+            if ($record.UserNotifiedOn) {
+                try {
+                    $localUserNotified = ([datetime]$record.UserNotifiedOn).ToLocalTime()
+                    $userNotificationText = $localUserNotified.ToString('f')
+                } catch {
+                    $userNotificationText = $record.UserNotifiedOn.ToString()
+                }
+            }
+
+            $passwordChangedText = 'No'
+            if ($record.PasswordChangedAfterNotification) {
+                $passwordChangedText = 'Yes'
+                if ($record.PasswordChangedOn) {
+                    try {
+                        $localPasswordChanged = ([datetime]$record.PasswordChangedOn).ToLocalTime()
+                        $passwordChangedText = "Yes (on $($localPasswordChanged.ToString('f')))"
+                    } catch {
+                        $passwordChangedText = "Yes (on $($record.PasswordChangedOn.ToString()))"
+                    }
+                }
+            }
+
+            [void]$builder.AppendLine('<tr>')
+            [void]$builder.AppendLine("<td>$userCell</td>")
+            [void]$builder.AppendLine("<td>$([System.Net.WebUtility]::HtmlEncode($userNotificationText))</td>")
+            [void]$builder.AppendLine("<td>$([System.Net.WebUtility]::HtmlEncode($passwordChangedText))</td>")
+            [void]$builder.AppendLine('</tr>')
         }
-        [void]$builder.AppendLine('</ul>')
+
+        [void]$builder.AppendLine('</tbody>')
+        [void]$builder.AppendLine('</table>')
     } else {
         [void]$builder.AppendLine('<p>No unsafe accounts detected.</p>')
     }
@@ -168,52 +200,6 @@ function Send-PwnedManagerNotification {
     } else {
         [void]$builder.AppendLine('<p>No accounts are currently sharing passwords.</p>')
     }
-
-    [void]$builder.AppendLine('<table role="presentation">')
-    [void]$builder.AppendLine('<thead><tr><th scope="col">User Account</th><th scope="col">Last User Notification</th><th scope="col">Password Changed?</th></tr></thead>')
-    [void]$builder.AppendLine('<tbody>')
-
-    foreach ($record in $sortedRecords) {
-        $accountId = $record.AccountId
-        $userCell = $null
-        if ($accountId -and $recordDisplayCache.ContainsKey($accountId)) {
-            $userCell = $recordDisplayCache[$accountId]
-        } else {
-            $userCell = & $buildUserCell $record
-        }
-
-        $userNotificationText = 'No notification sent'
-        if ($record.UserNotifiedOn) {
-            try {
-                $localUserNotified = ([datetime]$record.UserNotifiedOn).ToLocalTime()
-                $userNotificationText = $localUserNotified.ToString('f')
-            } catch {
-                $userNotificationText = $record.UserNotifiedOn.ToString()
-            }
-        }
-
-        $passwordChangedText = 'No'
-        if ($record.PasswordChangedAfterNotification) {
-            $passwordChangedText = 'Yes'
-            if ($record.PasswordChangedOn) {
-                try {
-                    $localPasswordChanged = ([datetime]$record.PasswordChangedOn).ToLocalTime()
-                    $passwordChangedText = "Yes (on $($localPasswordChanged.ToString('f')))"
-                } catch {
-                    $passwordChangedText = "Yes (on $($record.PasswordChangedOn.ToString()))"
-                }
-            }
-        }
-
-        [void]$builder.AppendLine('<tr>')
-        [void]$builder.AppendLine("<td>$userCell</td>")
-        [void]$builder.AppendLine("<td>$([System.Net.WebUtility]::HtmlEncode($userNotificationText))</td>")
-        [void]$builder.AppendLine("<td>$([System.Net.WebUtility]::HtmlEncode($passwordChangedText))</td>")
-        [void]$builder.AppendLine('</tr>')
-    }
-
-    [void]$builder.AppendLine('</tbody>')
-    [void]$builder.AppendLine('</table>')
     [void]$builder.AppendLine('<p class="muted">This message was generated automatically. If you have questions, contact the security team.</p>')
     [void]$builder.AppendLine('</body>')
     [void]$builder.AppendLine('</html>')
