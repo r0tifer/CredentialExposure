@@ -14,6 +14,7 @@ function Send-PwnedManagerNotification {
         [string[]]$ToAddresses,
         [Parameter(Mandatory)]
         [System.Collections.IEnumerable]$SummaryRecords,
+        [System.Collections.IEnumerable]$SharedPasswordGroups,
         [Parameter(Mandatory)]
         [ValidateSet('Weekly', 'Monthly')]
         [string]$ReportingFrequency,
@@ -45,28 +46,71 @@ function Send-PwnedManagerNotification {
     $subject = "Unsafe Password Summary - $ReportingFrequency Report"
 
     if ($recordCount -eq 1) {
-        $executiveSummary = 'One user account currently has a unsafe password that requires follow-up.'
+        $executiveSummary = 'One user account currently has an unsafe password that requires follow-up.'
     } else {
         $executiveSummary = "$recordCount user accounts currently have unsafe passwords that require follow-up."
     }
 
     $sortedRecords = @($records | Sort-Object DisplayName, SamAccountName)
 
+    $sharedPasswordGroupsInput = @()
+    if ($PSBoundParameters.ContainsKey('SharedPasswordGroups') -and $SharedPasswordGroups) {
+        $sharedPasswordGroupsInput = @($SharedPasswordGroups | Where-Object { $_ })
+    }
+
     $sharedPasswordGroups = @()
     $sharedAccountCount = 0
-    if ($sortedRecords) {
+    if ($sharedPasswordGroupsInput) {
+        $sharedPasswordGroups = @(
+            $sharedPasswordGroupsInput |
+                Where-Object {
+                    $_ -and $_.PSObject.Properties['Accounts'] -and (@($_.Accounts).Count -gt 1)
+                } |
+                ForEach-Object {
+                    $accounts = @($_.Accounts)
+                    [pscustomobject]@{
+                        GroupId  = if ($_.PSObject.Properties['GroupId'] -and $_.GroupId) { $_.GroupId } else { 'Shared Password Group' }
+                        Accounts = $accounts
+                    }
+                } |
+                Where-Object { $_.Accounts } |
+                Sort-Object -Property @{ Expression = { $_.Accounts.Count }; Descending = $true }, @{ Expression = { $_.GroupId } }
+        )
+
+        foreach ($group in $sharedPasswordGroups) {
+            $sharedAccountCount += $group.Accounts.Count
+        }
+    } elseif ($sortedRecords) {
         $sharedPasswordGroups = @(
             $sortedRecords |
                 Where-Object { $_.SharedPasswordGroupId } |
                 Group-Object -Property SharedPasswordGroupId |
                 Where-Object { $_.Count -gt 1 } |
-                Sort-Object -Property @{ Expression = { $_.Count }; Descending = $true }, @{ Expression = { $_.Name } }
+                ForEach-Object {
+                    $groupId = if ($_.Name) { $_.Name } else { 'Shared Password Group' }
+                    $accounts = @($_.Group)
+                    [pscustomobject]@{
+                        GroupId  = $groupId
+                        Accounts = $accounts
+                    }
+                } |
+                Sort-Object -Property @{ Expression = { $_.Accounts.Count }; Descending = $true }, @{ Expression = { $_.GroupId } }
         )
 
         foreach ($group in $sharedPasswordGroups) {
-            $sharedAccountCount += $group.Count
+            $sharedAccountCount += $group.Accounts.Count
         }
     }
+
+    $sharedAccountsSentence = $null
+    if ($sharedAccountCount -gt 0) {
+        $sharedAccountWord = if ($sharedAccountCount -eq 1) { 'account' } else { 'accounts' }
+        $sharedAccountsSentence = "$sharedAccountCount of these $sharedAccountWord share the same password with another active user, increasing the risk of compromise spreading between accounts."
+    } else {
+        $sharedAccountsSentence = 'No accounts are currently sharing the same password, but every password listed below has appeared in a known data breach.'
+    }
+
+    $executiveSummaryDetails = "{0} {1} Review the tables below to see who has been notified and whether a password change has been completed." -f $executiveSummary.Trim(), $sharedAccountsSentence
 
     $recordDisplayCache = @{}
     $buildUserCell = {
@@ -101,8 +145,6 @@ function Send-PwnedManagerNotification {
         }
     }
 
-    $frequencyDescription = if ($ReportingFrequency -eq 'Weekly') { 'weekly' } else { 'monthly' }
-
     $builder = New-Object System.Text.StringBuilder
     [void]$builder.AppendLine('<!DOCTYPE html>')
     [void]$builder.AppendLine('<html lang="en">')
@@ -117,7 +159,8 @@ function Send-PwnedManagerNotification {
     [void]$builder.AppendLine('</style>')
     [void]$builder.AppendLine('</head>')
     [void]$builder.AppendLine('<body>')
-    [void]$builder.AppendLine("<p><strong>Executive Summary:</strong> $([System.Net.WebUtility]::HtmlEncode($executiveSummary))</p>")
+    [void]$builder.AppendLine('<h1>Executive Summary</h1>')
+    [void]$builder.AppendLine("<p>$([System.Net.WebUtility]::HtmlEncode($executiveSummaryDetails))</p>")
 
     [void]$builder.AppendLine('<h2>Summary</h2>')
     [void]$builder.AppendLine('<ul>')
@@ -179,11 +222,21 @@ function Send-PwnedManagerNotification {
     [void]$builder.AppendLine('<h2>Shared Password Groups</h2>')
     if ($sharedPasswordGroups) {
         foreach ($group in $sharedPasswordGroups) {
-            $groupLabel = & $encodeValue $group.Name
+            $groupLabel = $group.GroupId
+            if (-not $groupLabel) {
+                $groupLabel = 'Shared Password Group'
+            }
+
+            $groupAccounts = @($group.Accounts)
+            if (-not $groupAccounts) {
+                continue
+            }
+
+            $groupLabel = & $encodeValue $groupLabel
             [void]$builder.AppendLine("<h3>$groupLabel</h3>")
             [void]$builder.AppendLine('<ul>')
 
-            foreach ($record in ($group.Group | Sort-Object DisplayName, SamAccountName)) {
+            foreach ($record in ($groupAccounts | Sort-Object DisplayName, SamAccountName)) {
                 $accountId = $record.AccountId
                 $userCell = $null
                 if ($accountId -and $recordDisplayCache.ContainsKey($accountId)) {

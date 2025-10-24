@@ -962,7 +962,7 @@ function Get-PwnedADUserPassword {
 
                 if ($shouldSendManagerNotification) {
                     try {
-                        Send-PwnedManagerNotification -SmtpServer $notificationSettings.SmtpServer -Port $notificationSettings.SendingPort -EncryptionType $notificationSettings.EncryptionType -FromAddress $notificationSettings.FromAddress -ToAddresses $managerRecipients -SummaryRecords $managerSummaryRecords -ReportingFrequency $notificationSettings.ReportingFrequency -Credential $notificationSettings.Credential
+                        Send-PwnedManagerNotification -SmtpServer $notificationSettings.SmtpServer -Port $notificationSettings.SendingPort -EncryptionType $notificationSettings.EncryptionType -FromAddress $notificationSettings.FromAddress -ToAddresses $managerRecipients -SummaryRecords $managerSummaryRecords -SharedPasswordGroups $sharedPasswordGroups -ReportingFrequency $notificationSettings.ReportingFrequency -Credential $notificationSettings.Credential
                         Write-Verbose "Sent manager notification summary to $($managerRecipients -join ', ')."
 
                         $timestampString = $nowUtc.ToString('o')
