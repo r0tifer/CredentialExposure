@@ -19,9 +19,6 @@ Get-Pwnd-PassCheck extends the original [PwnedPassCheck](https://github.com/rmbo
 
 ## Installation
 
-### Latest release
-Install the main-branch build directly from this repository if you want the latest updates.
-
 ```powershell
 # (optional) loosen execution policy
 Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
@@ -50,6 +47,18 @@ iex (irm https://raw.githubusercontent.com/r0tifer/Get-Pwnd-PassCheck/main/instd
 > [!NOTE]
 > When the module runs for the first time it creates `C:\PwndPassCheck`, copies the template settings file to that folder, and prompts you to update the values before rerunning any audits.
 
+## Email notifications and reporting
+
+When notifications are enabled in the settings file:
+
+* **User notifications** are sent the first time (and then at most once per day) the module finds a compromised password. The email includes guidance for resetting the password via **Ctrl+Alt+Del**, the date of discovery, and the total number of alerts sent.
+* **Manager notifications** summarise exposure counts, last notification timestamps, and whether users have remediated their passwords. Reports can be generated weekly or monthly based on the `ReportingFrequency` setting.
+
+Both notification types use the SMTP settings in the configuration file. Supply credentials for an account authorised to send emails on behalf of your security team, and verify that any required TLS settings match your mail gateway.
+
+> [!IMPORTANT]
+> `EmailUserPassword` must contain the encrypted output from `Get-PwndNotifcationPassworSecret`. Run the command while signed in as the service account (or scheduled-task identity) that will execute the module so DPAPI can decrypt the value at runtime.
+
 ## Active Directory auditing workflow
 
 ```powershell
@@ -75,17 +84,7 @@ During each run the command:
 * `Get-PwnedAuditLog` – Returns audit entries for historical reporting.
 * `Update-PwnedAuditLog` – Marks notification attempts or password change confirmations so repeated alerts are avoided.
 
-## Email notifications and reporting
 
-When notifications are enabled in the settings file:
-
-* **User notifications** are sent the first time (and then at most once per day) the module finds a compromised password. The email includes guidance for resetting the password via **Ctrl+Alt+Del**, the date of discovery, and the total number of alerts sent.
-* **Manager notifications** summarise exposure counts, last notification timestamps, and whether users have remediated their passwords. Reports can be generated weekly or monthly based on the `ReportingFrequency` setting.
-
-Both notification types use the SMTP settings in the configuration file. Supply credentials for an account authorised to send emails on behalf of your security team, and verify that any required TLS settings match your mail gateway.
-
-> [!IMPORTANT]
-> `EmailUserPassword` must contain the encrypted output from `Get-PwndNotifcationPassworSecret`. Run the command while signed in as the service account (or scheduled-task identity) that will execute the module so DPAPI can decrypt the value at runtime.
 
 # Automate daily checks and 1 PM notifications
 
