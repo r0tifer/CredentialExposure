@@ -251,6 +251,10 @@ function Initialize-PwnedPassCheckDataEnvironment {
         if (-not $status.ServiceProjectPresent) {
             try {
                 Copy-Item -Path $status.ServiceProjectSource -Destination $script:DefaultServiceProjectPath -Recurse -Force
+                $copiedAppSettings = Join-Path -Path $script:DefaultServiceProjectPath -ChildPath 'appsettings.json'
+                if (Test-Path -Path $copiedAppSettings -PathType Leaf) {
+                    Remove-Item -Path $copiedAppSettings -Force -ErrorAction SilentlyContinue
+                }
                 $status.ServiceProjectCopied = $true
                 $status.ServiceProjectPresent = $true
             } catch {

@@ -66,6 +66,11 @@ function Copy-PwnedPassCheckServiceProject {
 
     Copy-Item -Path $serviceSource -Destination $destination -Recurse -Force
 
+    $serviceAppSettingsPath = Join-Path -Path $destination -ChildPath 'appsettings.json'
+    if (Test-Path -Path $serviceAppSettingsPath -PathType Leaf) {
+        Remove-Item -Path $serviceAppSettingsPath -Force -ErrorAction SilentlyContinue
+    }
+
     foreach ($buildFolder in @('bin', 'obj', '.vs')) {
         $buildPath = Join-Path -Path $destination -ChildPath $buildFolder
         if (Test-Path -Path $buildPath -PathType Container) {
