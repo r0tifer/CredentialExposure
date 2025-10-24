@@ -956,7 +956,10 @@ function Get-PwnedADUserPassword {
                     if ($timeSinceLastSummary -ge $minimumInterval) {
                         $shouldSendManagerNotification = $true
                     } else {
-                        Write-Verbose "Skipping manager notification; last summary sent on $($managerSummaryLastSentOn.ToString('u'))."
+                        $localManagerSummaryLastSentOn = $managerSummaryLastSentOn.ToLocalTime()
+                        $localTimeStamp = $localManagerSummaryLastSentOn.ToString('f')
+                        $utcTimeStamp = $managerSummaryLastSentOn.ToString('u')
+                        Write-Verbose "Skipping manager notification; last summary sent at $localTimeStamp (local time). Corresponding UTC timestamp: $utcTimeStamp."
                     }
                 }
 
