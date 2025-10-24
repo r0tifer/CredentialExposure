@@ -253,7 +253,7 @@ function Send-PwnedManagerNotification {
     } else {
         [void]$builder.AppendLine('<p>No accounts are currently sharing passwords.</p>')
     }
-    [void]$builder.AppendLine('<p class="muted">This message was generated automatically. If you have questions, contact the security team.</p>')
+    [void]$builder.AppendLine('<p class="muted">This message was generated automatically. If you have questions, contact Deeptree Inc.</p>')
     [void]$builder.AppendLine('</body>')
     [void]$builder.AppendLine('</html>')
 
