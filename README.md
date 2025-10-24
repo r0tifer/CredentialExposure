@@ -42,7 +42,7 @@ iex (irm https://raw.githubusercontent.com/r0tifer/Get-Pwnd-PassCheck/main/instd
    * `DomainName`, `DomainControllers`, and `BaseDN` for your Active Directory environment.
    * `HIBPApiKey` and `HIBPUserAgent` with the credentials issued to your organisation.
    * `NotifyUser` / `NotifyManager` toggles plus SMTP settings when you want email alerts.
-   * Generate the `EmailUserPassword` value with `New-PwnedNotificationPasswordSecret` while signed in as the service account that will run the module, then paste the encrypted output into the settings file.
+   * Generate the `EmailUserPassword` value with `Get-PwndNotifcationPassworSecret` while signed in as the service account that will run the module, then paste the encrypted output into the settings file.
    * `ManagersToNotify` and `ReportingFrequency` (Weekly or Monthly) for executive rollups.
 2. Ensure the account running audits can replicate directory data and send email through the configured SMTP relay.
 3. Keep the settings file in `C:\PwndPassCheck` for the built-in defaults or pass a custom location with `-SettingsPath` when executing commands.
@@ -85,7 +85,7 @@ When notifications are enabled in the settings file:
 Both notification types use the SMTP settings in the configuration file. Supply credentials for an account authorised to send emails on behalf of your security team, and verify that any required TLS settings match your mail gateway.
 
 > [!IMPORTANT]
-> `EmailUserPassword` must contain the encrypted output from `New-PwnedNotificationPasswordSecret`. Run the command while signed in as the service account (or scheduled-task identity) that will execute the module so DPAPI can decrypt the value at runtime.
+> `EmailUserPassword` must contain the encrypted output from `Get-PwndNotifcationPassworSecret`. Run the command while signed in as the service account (or scheduled-task identity) that will execute the module so DPAPI can decrypt the value at runtime.
 
 # Automate daily checks and 1 PM notifications
 
