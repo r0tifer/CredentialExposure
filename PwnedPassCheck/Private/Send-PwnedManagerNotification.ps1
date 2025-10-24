@@ -18,7 +18,7 @@ function Send-PwnedManagerNotification {
         [ValidateSet('Weekly', 'Monthly')]
         [string]$ReportingFrequency,
         [Parameter(Mandatory)]
-        [System.Net.NetworkCredential]$Credential
+        [System.Management.Automation.PSCredential]$Credential
     )
 
     $recipients = @($ToAddresses | Where-Object { $_ -and -not [string]::IsNullOrWhiteSpace($_) }) | Sort-Object -Unique
@@ -241,7 +241,7 @@ function Send-PwnedManagerNotification {
             }
 
             $smtpClient.UseDefaultCredentials = $false
-            $smtpClient.Credentials = $Credential
+            $smtpClient.Credentials = $Credential.GetNetworkCredential()
             $smtpClient.Send($mailMessage)
         } finally {
             if ($null -ne $smtpClient) {

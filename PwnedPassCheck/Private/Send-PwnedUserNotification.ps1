@@ -23,7 +23,7 @@ function Send-PwnedUserNotification {
         [Parameter(Mandatory)]
         [int]$NotificationCount,
         [Parameter(Mandatory)]
-        [System.Net.NetworkCredential]$Credential
+        [System.Management.Automation.PSCredential]$Credential
     )
 
     $subject = 'Action Required: Reset Your Compromised Password'
@@ -71,7 +71,7 @@ Thank you for your prompt attention to this matter.
             }
 
             $smtpClient.UseDefaultCredentials = $false
-            $smtpClient.Credentials = $Credential
+            $smtpClient.Credentials = $Credential.GetNetworkCredential()
             $smtpClient.Send($mailMessage)
         } finally {
             if ($null -ne $smtpClient) {
