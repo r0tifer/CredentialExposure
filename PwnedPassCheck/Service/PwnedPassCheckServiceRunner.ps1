@@ -21,7 +21,7 @@ function Resolve-Module {
 }
 
 try {
-    Resolve-Module -Name 'PwnedPassCheck'
+    Resolve-Module -Name 'CredExposureCheck'
     Resolve-Module -Name 'DSInternals'
 } catch {
     Write-Error $_

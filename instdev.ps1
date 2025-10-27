@@ -115,9 +115,9 @@ if ([String]::IsNullOrWhiteSpace($PSScriptRoot)) {
 
     # download and extract
     $webclient = New-Object System.Net.WebClient
-    $url = 'https://github.com/r0tifer/Get-Pwnd-PassCheck/archive/refs/heads/main.zip'
-    Write-Host "Downloading latest version of PwnedPassCheck from $url" -ForegroundColor Cyan
-    $file = Join-Path ([system.io.path]::GetTempPath()) 'PwnedPassCheck.zip'
+    $url = 'https://github.com/r0tifer/CredentialExposure/archive/refs/heads/main.zip'
+    Write-Host "Downloading latest version of CredentialExposure from $url" -ForegroundColor Cyan
+    $file = Join-Path ([system.io.path]::GetTempPath()) 'CredentialExposure.zip'
     $webclient.DownloadFile($url,$file)
     Write-Host "File saved to $file" -ForegroundColor Green
 
@@ -135,7 +135,7 @@ if ([String]::IsNullOrWhiteSpace($PSScriptRoot)) {
 
     Write-Host "Removing any old copy" -ForegroundColor Cyan
     Remove-Item "$installpath\PwnedPassCheck" -Recurse -Force -EA SilentlyContinue
-    $extractedRoot = Get-ChildItem -Path $installpath -Directory | Where-Object { $_.Name -like 'Get-Pwnd-PassCheck-*' } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    $extractedRoot = Get-ChildItem -Path $installpath -Directory | Where-Object { $_.Name -like 'CredentialExposure-*' } | Sort-Object LastWriteTime -Descending | Select-Object -First 1
     if (-not $extractedRoot) {
         throw "Unable to locate extracted repository folder in '$installpath'."
     }
@@ -144,24 +144,34 @@ if ([String]::IsNullOrWhiteSpace($PSScriptRoot)) {
         throw "The extracted repository in '$($extractedRoot.FullName)' does not contain a 'PwnedPassCheck' module folder."
     }
     Write-Host "Copying module from $sourceModulePath" -ForegroundColor Cyan
-    Copy-Item $sourceModulePath $installpath -Recurse -Force
+    $destModulePath = Join-Path $installpath 'CredExposureCheck'
+    if (Test-Path $destModulePath) { Remove-Item $destModulePath -Recurse -Force -EA SilentlyContinue }
+    Copy-Item $sourceModulePath $destModulePath -Recurse -Force
+    # Ensure a manifest with the destination module name exists for Import-Module by name
+    $srcManifest = Join-Path $destModulePath 'PwnedPassCheck.psd1'
+    $dstManifest = Join-Path $destModulePath 'CredExposureCheck.psd1'
+    if (Test-Path $srcManifest) { Copy-Item $srcManifest $dstManifest -Force }
     Copy-PwnedPassCheckServiceProject -SourceRoot $extractedRoot.FullName
     Copy-PwnedPassCheckInstaller -SourceRoot $extractedRoot.FullName
     Remove-Item $extractedRoot.FullName -Recurse -Force -Confirm:$false -EA SilentlyContinue
-    Import-Module -Name PwnedPassCheck -Force
+    Import-Module -Name CredExposureCheck -Force
 } else {
     # running locally
-    Remove-Item "$installpath\PwnedPassCheck" -Recurse -Force -EA SilentlyContinue
-    Copy-Item "$PSScriptRoot\PwnedPassCheck" $installpath -Recurse -Force
+    Remove-Item "$installpath\CredExposureCheck" -Recurse -Force -EA SilentlyContinue
+    $destModulePath = Join-Path $installpath 'CredExposureCheck'
+    Copy-Item "$PSScriptRoot\PwnedPassCheck" $destModulePath -Recurse -Force
+    $srcManifest = Join-Path $destModulePath 'PwnedPassCheck.psd1'
+    $dstManifest = Join-Path $destModulePath 'CredExposureCheck.psd1'
+    if (Test-Path $srcManifest) { Copy-Item $srcManifest $dstManifest -Force }
     Copy-PwnedPassCheckServiceProject -SourceRoot $PSScriptRoot
     Copy-PwnedPassCheckInstaller -SourceRoot $PSScriptRoot
     # force re-load the module (assuming you're editing locally and want to see changes)
-    Import-Module -Name PwnedPassCheck -Force
+    Import-Module -Name CredExposureCheck -Force
 }
 Write-Host 'Module has been installed' -ForegroundColor Green
 
 try {
-    $moduleInfo = Get-Module -Name PwnedPassCheck -ErrorAction Stop
+    $moduleInfo = Get-Module -Name CredExposureCheck -ErrorAction Stop
     $environmentStatus = $moduleInfo.Invoke({ Initialize-PwnedPassCheckDataEnvironment })
 
     if ($environmentStatus.DataDirectory) {
@@ -231,4 +241,4 @@ try {
     Write-Warning "Unable to initialise the PwnedPassCheck data directory automatically: $_"
 }
 
-Get-Command -Module PwnedPassCheck
+Get-Command -Module CredExposureCheck

@@ -57,8 +57,8 @@ function Invoke-ADExposureAudit {
     )
 
     begin {
-        if (-not (Get-Command -Name Get-ExposureByHash -Module PwnedPassCheck -ErrorAction SilentlyContinue)) {
-            throw "Get-ExposureByHash from the PwnedPassCheck module must be available."
+        if (-not (Get-Command -Name Get-ExposureByHash -Module CredExposureCheck -ErrorAction SilentlyContinue)) {
+            throw "Get-ExposureByHash from the CredExposureCheck module must be available."
         }
 
         if (-not (Get-Command -Name Get-ADReplAccount -ErrorAction SilentlyContinue)) {

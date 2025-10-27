@@ -1,6 +1,6 @@
-# Get-Pwnd-PassCheck
+# CredentialExposure
 
-Get-Pwnd-PassCheck extends the original [PwnedPassCheck](https://github.com/rmbolger/PwnedPassCheck) module with automation capabilities tailored for small and midsize environments. It continues to wrap the [Have I Been Pwned](https://haveibeenpwned.com) Pwned Passwords API, but now layers in Active Directory auditing, automated notifications, managerial reporting, and persistent audit tracking so you can respond to compromised credentials faster.
+CredentialExposure extends the original [PwnedPassCheck](https://github.com/rmbolger/PwnedPassCheck) module with automation capabilities tailored for small and midsize environments. It continues to wrap the [Have I Been Pwned](https://haveibeenpwned.com) Pwned Passwords API, but now layers in Active Directory auditing, automated notifications, managerial reporting, and persistent audit tracking so you can respond to compromised credentials faster.
 
 ## Key features
 
@@ -24,7 +24,7 @@ Get-Pwnd-PassCheck extends the original [PwnedPassCheck](https://github.com/rmbo
 Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
 
 # install development build
-iex (irm https://raw.githubusercontent.com/r0tifer/Get-Pwnd-PassCheck/main/instdev.ps1)
+iex (irm https://raw.githubusercontent.com/r0tifer/CredentialExposure/main/instdev.ps1)
 ```
 
 > [!WARNING]
@@ -62,7 +62,7 @@ Both notification types use the SMTP settings in the configuration file. Supply 
 ## Active Directory auditing workflow
 
 ```powershell
-Import-Module PwnedPassCheck
+Import-Module CredExposureCheck
 Import-Module DSInternals
 
 # Run the audit using the configured settings
@@ -88,9 +88,9 @@ During each run the command:
 
 # Automate daily checks and 1 PM notifications
 
-Running the audit once and relying on manual follow-up defeats the purpose of automated remediation. Get-Pwnd-PassCheck can run as a Windows Service or a scheduled task, automatically executing `Invoke-ADExposureAudit` every day at **1:00 PM** (or the configured frequency in PwndPassCheckSettings.psd1) to detect unsafe accounts and send notifications promptly.
+Running the audit once and relying on manual follow-up defeats the purpose of automated remediation. CredentialExposure can run as a Windows Service or a scheduled task, automatically executing `Invoke-ADExposureAudit` every day at **1:00 PM** (or the configured frequency in PwndPassCheckSettings.psd1) to detect unsafe accounts and send notifications promptly.
 
-## Run Get-Pwnd-PassCheck as a Windows service
+## Run CredentialExposure as a Windows service
 
 **Service layout**
    - Always run `instdev.ps1` on the machine that will host the Windows service. This installs the PowerShell module and seeds `C:\PwndPassCheck` with everything the worker expects (`appsettings.json`, `PwnedPassCheckServiceRunner.ps1`, the module settings file, an empty audit log, and a copy of the `Service` project). The installer script itself is also saved to `C:\PwndPassCheck\instdev.ps1` so you can rerun it locally if needed.
