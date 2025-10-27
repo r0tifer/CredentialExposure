@@ -125,7 +125,7 @@ public sealed class PwnedPassCheckWorker : BackgroundService
             };
 
             var runStarted = DateTimeOffset.Now;
-            _logger.LogInformation("Starting Get-PwnedADUserPassword run at {StartTime:u}.", runStarted);
+            _logger.LogInformation("Starting Invoke-ADExposureAudit run at {StartTime:u}.", runStarted);
 
             if (!process.Start())
             {
@@ -168,11 +168,11 @@ public sealed class PwnedPassCheckWorker : BackgroundService
 
             if (exitCode == 0)
             {
-                _logger.LogInformation("Get-PwnedADUserPassword completed successfully in {Duration}.", runDuration);
+                _logger.LogInformation("Invoke-ADExposureAudit completed successfully in {Duration}.", runDuration);
             }
             else
             {
-                _logger.LogError("Get-PwnedADUserPassword exited with code {ExitCode} after {Duration}.", exitCode, runDuration);
+                _logger.LogError("Invoke-ADExposureAudit exited with code {ExitCode} after {Duration}.", exitCode, runDuration);
             }
         }
         catch (OperationCanceledException)
@@ -181,7 +181,7 @@ public sealed class PwnedPassCheckWorker : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error while running Get-PwnedADUserPassword.");
+            _logger.LogError(ex, "Unexpected error while running Invoke-ADExposureAudit.");
         }
         finally
         {

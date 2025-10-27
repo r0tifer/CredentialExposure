@@ -1,4 +1,4 @@
-function Get-PwndNotifcationPassworSecret {
+function Get-ExposureNotificationSecret {
     <#
     .SYNOPSIS
     Generates an encrypted password string suitable for EmailUserPassword in the settings file.

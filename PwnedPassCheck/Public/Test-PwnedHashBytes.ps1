@@ -1,4 +1,4 @@
-function Test-PwnedHashBytes {
+function Test-ExposureByHashBytes {
     param(
         [Parameter(Mandatory,Position=0,ValueFromPipeline,ValueFromPipelineByPropertyName)]
         [Alias('NTHash')]
@@ -45,7 +45,7 @@ function Test-PwnedHashBytes {
         Write-Verbose "Converted hash bytes to $PasswordHash"
 
         # Check the hash
-        $result = Get-PwnedHash $PasswordHash @checkParams
+        $result = Get-ExposureByHash $PasswordHash @checkParams
 
         if ($result.SeenCount -gt 0) {
             return $true
@@ -85,7 +85,7 @@ function Test-PwnedHashBytes {
 
     .EXAMPLE
         $hashBytes = Get-SHA1Hash 'password' -AsBytes
-        PS C:\>Test-PwnedHashBytes $hashBytes
+        PS C:\>Test-ExposureByHashBytes $hashBytes
 
         Test a byte array hash against the official pwnedpasswords.com API
 

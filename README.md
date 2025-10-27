@@ -4,12 +4,12 @@ Get-Pwnd-PassCheck extends the original [PwnedPassCheck](https://github.com/rmbo
 
 ## Key features
 
-* **Active Directory password auditing** – `Get-PwnedADUserPassword` replicates user password hashes from the domain controllers you define and checks each hash against the Have I Been Pwned API using k-anonymity for privacy.
+* **Active Directory password auditing** – `Invoke-ADExposureAudit` replicates user password hashes from the domain controllers you define and checks each hash against the Have I Been Pwned API using k-anonymity for privacy.
 * **Centralised configuration** – All runtime options (domain controllers, notification preferences, API credentials, etc.) live in `PwnedPassCheckSettings.psd1`, keeping scripted runs and scheduled automation consistent.
 * **User notifications** – When enabled, affected users receive a templated email explaining the exposure, the last notification date, and how to reset their password. Emails are throttled to one per account per day.
 * **Managerial reporting** – HTML reports summarise exposure counts, notification history, and remediation status. Reports are sent on the cadence you define (weekly or monthly) and tracked so stakeholders are not spammed.
-* **Audit log** – Every password audit is written to `C:\PwndPassCheck\PwnedPassCheckAuditLog.json` by default so you can review historical exposure counts, notification state, and password change status with `Get-PwnedAuditLog` and `Update-PwnedAuditLog`.
-* **Classic password/hash lookups** – Original commands such as `Get-PwnedPassword`, `Get-PwnedHash`, and their `Test-*` counterparts remain for ad-hoc checks against SHA1 or NTLM datasets and custom API endpoints.
+* **Audit log** – Every password audit is written to `C:\PwndPassCheck\PwnedPassCheckAuditLog.json` by default so you can review historical exposure counts, notification state, and password change status with `Get-ExposureAuditLog` and `Update-ExposureAuditLog`.
+* **Classic password/hash lookups** – Use `Get-Exposure`, `Get-ExposureByHash`, and their `Test-*` counterparts for ad-hoc checks against SHA1 or NTLM datasets and custom API endpoints.
 
 ## Requirements
 
@@ -39,7 +39,7 @@ iex (irm https://raw.githubusercontent.com/r0tifer/Get-Pwnd-PassCheck/main/instd
    * `DomainName`, `DomainControllers`, and `BaseDN` for your Active Directory environment.
    * `HIBPApiKey` and `HIBPUserAgent` with the credentials issued to your organisation.
    * `NotifyUser` / `NotifyManager` toggles plus SMTP settings when you want email alerts.
-   * Generate the `EmailUserPassword` value with `Get-PwndNotifcationPassworSecret` while signed in as the service account that will run the module, then paste the encrypted output into the settings file.
+   * Generate the `EmailUserPassword` value with `Get-ExposureNotificationSecret` while signed in as the service account that will run the module, then paste the encrypted output into the settings file.
    * `ManagersToNotify` and `ReportingFrequency` (Weekly or Monthly) for executive rollups.
 2. Ensure the account running audits can replicate directory data and send email through the configured SMTP relay.
 3. Keep the settings file in `C:\PwndPassCheck` for the built-in defaults or pass a custom location with `-SettingsPath` when executing commands.
@@ -57,7 +57,7 @@ When notifications are enabled in the settings file:
 Both notification types use the SMTP settings in the configuration file. Supply credentials for an account authorised to send emails on behalf of your security team, and verify that any required TLS settings match your mail gateway.
 
 > [!IMPORTANT]
-> `EmailUserPassword` must contain the encrypted output from `Get-PwndNotifcationPassworSecret`. Run the command while signed in as the service account (or scheduled-task identity) that will execute the module so DPAPI can decrypt the value at runtime.
+> `EmailUserPassword` must contain the encrypted output from `Get-ExposureNotificationSecret`. Run the command while signed in as the service account (or scheduled-task identity) that will execute the module so DPAPI can decrypt the value at runtime.
 
 ## Active Directory auditing workflow
 
@@ -66,7 +66,7 @@ Import-Module PwnedPassCheck
 Import-Module DSInternals
 
 # Run the audit using the configured settings
-$results = Get-PwnedADUserPassword -Verbose
+$results = Invoke-ADExposureAudit -Verbose
 
 # Filter to detected accounts
 $results | Where-Object IsPwned
@@ -81,14 +81,14 @@ During each run the command:
 
 ### Reviewing audit history
 
-* `Get-PwnedAuditLog` – Returns audit entries for historical reporting.
-* `Update-PwnedAuditLog` – Marks notification attempts or password change confirmations so repeated alerts are avoided.
+* `Get-ExposureAuditLog` – Returns audit entries for historical reporting.
+* `Update-ExposureAuditLog` – Marks notification attempts or password change confirmations so repeated alerts are avoided.
 
 
 
 # Automate daily checks and 1 PM notifications
 
-Running the audit once and relying on manual follow-up defeats the purpose of automated remediation. Get-Pwnd-PassCheck can run as a Windows Service or a scheduled task, automatically executing `Get-PwnedADUserPassword` every day at **1:00 PM** (or the configured frequency in PwndPassCheckSettings.psd1) to detect unsafe accounts and send notifications promptly.
+Running the audit once and relying on manual follow-up defeats the purpose of automated remediation. Get-Pwnd-PassCheck can run as a Windows Service or a scheduled task, automatically executing `Invoke-ADExposureAudit` every day at **1:00 PM** (or the configured frequency in PwndPassCheckSettings.psd1) to detect unsafe accounts and send notifications promptly.
 
 ## Run Get-Pwnd-PassCheck as a Windows service
 
@@ -121,7 +121,7 @@ Running the audit once and relying on manual follow-up defeats the purpose of au
 
 **Register the Windows service (elevated PowerShell)**
    - `$serviceExe = 'C:\Program Files\PwnedPassCheckService\PwnedPassCheckService.exe'`
-   - `New-Service -Name 'PwnedPassCheckService' -BinaryPathName "`"$serviceExe`"" -DisplayName 'Pwned Password Auditor' -Description 'Runs Get-PwnedADUserPassword on a fixed interval.' -StartupType Automatic -Credential (Get-Credential)`
+   - `New-Service -Name 'PwnedPassCheckService' -BinaryPathName "`"$serviceExe`"" -DisplayName 'Pwned Password Auditor' -Description 'Runs Invoke-ADExposureAudit on a fixed interval.' -StartupType Automatic -Credential (Get-Credential)`
    - `sc.exe failure PwnedPassCheckService reset= 86400 actions= restart/60000/restart/60000/""/0` (optional: auto-restart on failure)
 
 **Start and validate**
@@ -139,17 +139,17 @@ Running the audit once and relying on manual follow-up defeats the purpose of au
 
 ```powershell
 # Plain text (not recommended for real passwords)
-Get-PwnedPassword 'password'
+Get-Exposure 'password'
 
 # SecureString input
 $secure = Read-Host -Prompt 'Enter Password' -AsSecureString
-Get-PwnedPassword $secure
+Get-Exposure $secure
 
 # Check a known hash
-Get-PwnedHash '70CCD9007338D6D81DD3B6271621B9CF9A97EA00'
+Get-ExposureByHash '70CCD9007338D6D81DD3B6271621B9CF9A97EA00'
 
 # Test against an alternate API root and hash type
-Get-PwnedPassword 'password' -ApiRoot 'https://pwnntlm.example.com/range/' -HashType NTLM
+Get-Exposure 'password' -ApiRoot 'https://pwnntlm.example.com/range/' -HashType NTLM
 ```
 
 Each command returns the compromised hash count without ever sending the full password to the remote service thanks to k-anonymity.

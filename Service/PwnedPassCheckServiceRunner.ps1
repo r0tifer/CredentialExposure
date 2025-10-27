@@ -42,12 +42,12 @@ if ($Verbose.IsPresent) {
 }
 
 try {
-    $results = @(Get-PwnedADUserPassword @invokeParams)
+    $results = @(Invoke-ADExposureAudit @invokeParams)
     $totalAccounts = $results.Count
     $compromisedCount = ($results | Where-Object { $_.IsPwned }).Count
     Write-Output ("Audit completed at {0:u}. Accounts processed: {1}; compromised: {2}." -f (Get-Date), $totalAccounts, $compromisedCount)
     exit 0
 } catch {
-    Write-Error "Get-PwnedADUserPassword failed: $_"
+    Write-Error "Invoke-ADExposureAudit failed: $_"
     exit 4
 }

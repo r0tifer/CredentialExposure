@@ -1,4 +1,4 @@
-function Update-PwnedAuditLog {
+function Update-ExposureAuditLog {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param(
         [string]$AuditLogPath,

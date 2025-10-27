@@ -1,4 +1,4 @@
-function Get-PwnedHash {
+function Get-ExposureByHash {
     [CmdletBinding()]
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword','')]
     param(
@@ -130,13 +130,13 @@ function Get-PwnedHash {
 
     .EXAMPLE
         $hash = '5BAA61E4C9B93F3F0682250B6CF8331B7EE68FD8' # UTF8 SHA1 hash of 'password'
-        PS C:\>Get-PwnedHash $hash
+        PS C:\>Get-ExposureByHash $hash
 
         Test a password hash against the official pwnedpasswords.com API
 
     .EXAMPLE
         $hash = '8846F7EAEE8FB117AD06BDD830B7586C'  # NTLM hash of 'password'
-        PS C:\>$hash | Get-PwnedHash -ApiRoot 'http://internal.example.com/range/'
+        PS C:\>$hash | Get-ExposureByHash -ApiRoot 'http://internal.example.com/range/'
 
         Test a password hash against an internal NTLM Pwned Passwords API endpoint.
 

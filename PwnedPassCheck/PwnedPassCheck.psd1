@@ -10,17 +10,17 @@ PowerShellVersion = '3.0'
 
 FunctionsToExport = @(
     'Get-NTLMHash'
-    'Get-PwnedADUserPassword'
-    'Get-PwnedAuditLog'
-    'Get-PwnedHash'
-    'Get-PwnedHashBytes'
-    'Get-PwnedPassword'
+    'Invoke-ADExposureAudit'
+    'Get-ExposureAuditLog'
+    'Get-ExposureByHash'
+    'Get-ExposureByHashBytes'
+    'Get-Exposure'
     'Get-SHA1Hash'
-    'Test-PwnedHash'
-    'Test-PwnedHashBytes'
-    'Test-PwnedPassword'
-    'Get-PwndNotifcationPassworSecret'
-    'Update-PwnedAuditLog'
+    'Test-ExposureByHash'
+    'Test-ExposureByHashBytes'
+    'Test-Exposure'
+    'Get-ExposureNotificationSecret'
+    'Update-ExposureAuditLog'
 )
 
 CmdletsToExport = @()

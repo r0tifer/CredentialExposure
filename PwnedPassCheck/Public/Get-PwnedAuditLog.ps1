@@ -1,4 +1,4 @@
-function Get-PwnedAuditLog {
+function Get-ExposureAuditLog {
     [CmdletBinding()]
     param(
         [string]$AuditLogPath,
