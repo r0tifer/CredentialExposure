@@ -61,8 +61,25 @@ function Invoke-ADExposureAudit {
             throw "Get-ExposureByHash from the CredExposureCheck module must be available."
         }
 
+        # Determine Windows platform for PowerShell editions where $IsWindows is unavailable.
+        $runningOnWindows = $false
+        $isWindowsIndicator = Get-Variable -Name 'IsWindows' -ValueOnly -ErrorAction SilentlyContinue
+        if ($null -ne $isWindowsIndicator) {
+            $runningOnWindows = [bool]$isWindowsIndicator
+        } elseif ($PSVersionTable.PSEdition -eq 'Desktop' -or $env:OS -eq 'Windows_NT') {
+            $runningOnWindows = $true
+        } else {
+            try {
+                if ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)) {
+                    $runningOnWindows = $true
+                }
+            } catch {
+                # RuntimeInformation not available (older Windows PowerShell); fall back to default false.
+            }
+        }
+
         if (-not (Get-Command -Name Get-ADReplAccount -ErrorAction SilentlyContinue)) {
-            if ($IsWindows) {
+            if ($runningOnWindows) {
                 Write-Warning 'The DSInternals module is required for Active Directory replication (Get-ADReplAccount).'
                 try {
                     $yes = New-Object System.Management.Automation.Host.ChoiceDescription '&Yes','Install DSInternals for the current user from the PowerShell Gallery.'
