@@ -170,6 +170,72 @@ if ([String]::IsNullOrWhiteSpace($PSScriptRoot)) {
 }
 Write-Host 'Module has been installed' -ForegroundColor Green
 
+function Ensure-DSInternalsModule {
+    param()
+
+    if (-not $IsWindows) {
+        return
+    }
+
+    if (Get-Command -Name Get-ADReplAccount -ErrorAction SilentlyContinue) {
+        return
+    }
+
+    Write-Warning "The DSInternals module is required for Active Directory replication (Get-ADReplAccount)."
+    try {
+        # Prompt user for consent to install
+        $yes = New-Object System.Management.Automation.Host.ChoiceDescription '&Yes','Install DSInternals for the current user from the PowerShell Gallery.'
+        $no  = New-Object System.Management.Automation.Host.ChoiceDescription '&No','Skip installation.'
+        $choice = $Host.UI.PromptForChoice('DSInternals Required', 'DSInternals is not installed. Would you like to install it now?', @($yes,$no), 0)
+        if ($choice -ne 0) {
+            Write-Host 'Skipping DSInternals installation. You can install it later with: Install-Module DSInternals -Scope CurrentUser' -ForegroundColor Yellow
+            return
+        }
+
+        # Ensure TLS 1.2+ for gallery downloads
+        $currentMaxTls = [Math]::Max([Net.ServicePointManager]::SecurityProtocol.value__,[Net.SecurityProtocolType]::Tls.value__)
+        $newTlsTypes = [enum]::GetValues('Net.SecurityProtocolType') | Where-Object { $_ -gt $currentMaxTls }
+        $newTlsTypes | ForEach-Object {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor $_
+        }
+
+        # Make sure PowerShellGet is available
+        if (-not (Get-Module -ListAvailable -Name PowerShellGet)) {
+            Import-Module PowerShellGet -ErrorAction SilentlyContinue | Out-Null
+        }
+
+        # Ensure PSGallery is registered
+        $psGallery = $null
+        try { $psGallery = Get-PSRepository -Name 'PSGallery' -ErrorAction Stop } catch {}
+        if (-not $psGallery) {
+            try { Register-PSRepository -Default -ErrorAction Stop } catch {}
+        }
+
+        # Install DSInternals for current user
+        Write-Host 'Installing DSInternals module (CurrentUser scope)...' -ForegroundColor Cyan
+        try {
+            Install-Module -Name DSInternals -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
+        } catch {
+            Write-Warning "Failed to install DSInternals from the PowerShell Gallery: $_"
+        }
+
+        # Import the module if available now
+        try {
+            Import-Module -Name DSInternals -Force -ErrorAction Stop
+        } catch {
+            Write-Warning "DSInternals could not be imported: $_"
+        }
+
+        if (Get-Command -Name Get-ADReplAccount -ErrorAction SilentlyContinue) {
+            Write-Host 'DSInternals is installed and ready.' -ForegroundColor Green
+        } else {
+            Write-Warning 'Get-ADReplAccount is still not available. Install the DSInternals module and try again.'
+        }
+    } catch {
+        Write-Warning "An error occurred while checking/installing DSInternals: $_"
+    }
+}
+
 try {
     $moduleInfo = Get-Module -Name CredExposureCheck -ErrorAction Stop
     $environmentStatus = $moduleInfo.Invoke({ Initialize-PwnedPassCheckDataEnvironment })
@@ -240,5 +306,8 @@ try {
 } catch {
     Write-Warning "Unable to initialise the PwnedPassCheck data directory automatically: $_"
 }
+
+# Offer to install DSInternals if missing
+Ensure-DSInternalsModule
 
 Get-Command -Module CredExposureCheck
