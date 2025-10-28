@@ -61,6 +61,161 @@ function Invoke-ADExposureAudit {
             throw "Get-ExposureByHash from the CredExposureCheck module must be available."
         }
 
+        # Manual download/extraction fallback for hosts lacking Install-Module (older Windows PowerShell).
+        function Invoke-ManualDSInternalsInstall {
+            param(
+                [Parameter(Mandatory)]
+                [string]$ModuleDestinationRoot
+            )
+
+            $result = [pscustomobject]@{
+                Success  = $false
+                Messages = New-Object System.Collections.ArrayList
+            }
+
+            $packageTempPath = $null
+            try {
+                $packageUrl = 'https://www.powershellgallery.com/api/v2/package/DSInternals'
+                $packageTempPath = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath ([IO.Path]::GetRandomFileName())
+                New-Item -Path $packageTempPath -ItemType Directory -Force | Out-Null
+
+                $packageFile = Join-Path -Path $packageTempPath -ChildPath 'DSInternals.nupkg'
+                try {
+                    $webClient = New-Object System.Net.WebClient
+                    $webClient.DownloadFile($packageUrl, $packageFile)
+                } catch {
+                    $result.Messages.Add("Failed to download DSInternals package from PowerShell Gallery: $($_.Exception.Message)") | Out-Null
+                    return $result
+                }
+
+                if (-not (Test-Path -Path $packageFile)) {
+                    $result.Messages.Add('Package download did not produce a file on disk.') | Out-Null
+                    return $result
+                }
+
+                $extractionPath = Join-Path -Path $packageTempPath -ChildPath 'Extracted'
+                New-Item -Path $extractionPath -ItemType Directory -Force | Out-Null
+
+                $extracted = $false
+                try {
+                    Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction Stop
+                    [System.IO.Compression.ZipFile]::ExtractToDirectory($packageFile, $extractionPath)
+                    $extracted = $true
+                } catch {
+                    try {
+                        $shell = New-Object -ComObject Shell.Application
+                        $zipNamespace = $shell.NameSpace($packageFile)
+                        $destinationNamespace = $shell.NameSpace($extractionPath)
+                        if ($zipNamespace -and $destinationNamespace) {
+                            $destinationNamespace.CopyHere($zipNamespace.Items(), 0x10)
+                            $waitUntil = (Get-Date).AddSeconds(10)
+                            do {
+                                Start-Sleep -Milliseconds 200
+                            } while (-not (Get-ChildItem -Path $extractionPath -Recurse -ErrorAction SilentlyContinue) -and (Get-Date) -lt $waitUntil)
+                            if (Get-ChildItem -Path $extractionPath -Recurse -ErrorAction SilentlyContinue) {
+                                $extracted = $true
+                            } else {
+                                $result.Messages.Add('Shell-based extraction completed without producing files.') | Out-Null
+                            }
+                        } else {
+                            $result.Messages.Add('Shell extraction helpers were unavailable on this host.') | Out-Null
+                        }
+                    } catch {
+                        $result.Messages.Add("Failed to extract DSInternals package: $($_.Exception.Message)") | Out-Null
+                    }
+                }
+
+                if (-not $extracted) {
+                    return $result
+                }
+
+                $moduleManifest = Get-ChildItem -Path $extractionPath -Filter 'DSInternals.psd1' -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+                if (-not $moduleManifest) {
+                    $result.Messages.Add('The extracted package did not contain a DSInternals manifest.') | Out-Null
+                    return $result
+                }
+
+                $moduleSource = Split-Path -Path $moduleManifest.FullName -Parent
+
+                try {
+                    if (-not (Test-Path -Path $ModuleDestinationRoot)) {
+                        New-Item -Path $ModuleDestinationRoot -ItemType Directory -Force | Out-Null
+                    }
+                } catch {
+                    $result.Messages.Add("Unable to create module destination root '$ModuleDestinationRoot': $($_.Exception.Message)") | Out-Null
+                    return $result
+                }
+
+                $moduleDestination = Join-Path -Path $ModuleDestinationRoot -ChildPath 'DSInternals'
+                try {
+                    if (-not (Test-Path -Path $moduleDestination)) {
+                        New-Item -Path $moduleDestination -ItemType Directory -Force | Out-Null
+                    }
+                    Copy-Item -Path (Join-Path -Path $moduleSource -ChildPath '*') -Destination $moduleDestination -Recurse -Force -ErrorAction Stop
+                } catch {
+                    $result.Messages.Add("Failed to copy DSInternals module files to '$moduleDestination': $($_.Exception.Message)") | Out-Null
+                    return $result
+                }
+
+                $result.Success = $true
+                return $result
+            } finally {
+                if ($packageTempPath -and (Test-Path -Path $packageTempPath)) {
+                    try { Remove-Item -Path $packageTempPath -Recurse -Force -ErrorAction SilentlyContinue } catch {}
+                }
+            }
+        }
+
+        # Wrapper that surfaces manual install warnings and attempts to import DSInternals afterwards.
+        $invokeManualDSInternalsFallback = {
+            param(
+                [ref]$FailureList
+            )
+
+            $documentsRoot = $null
+            try {
+                $documentsRoot = [Environment]::GetFolderPath([Environment+SpecialFolder]::MyDocuments)
+            } catch {
+                $documentsRoot = $null
+            }
+
+            if ([string]::IsNullOrWhiteSpace($documentsRoot)) {
+                $message = 'Unable to determine a writable module path for manual DSInternals installation.'
+                Write-Warning $message
+                if ($FailureList.Value) { $FailureList.Value += $message } else { $FailureList.Value = @($message) }
+                return $false
+            }
+
+            $moduleRoot = Join-Path -Path $documentsRoot -ChildPath 'WindowsPowerShell\Modules'
+            $manualResult = Invoke-ManualDSInternalsInstall -ModuleDestinationRoot $moduleRoot
+            if ($manualResult.Messages) {
+                foreach ($msg in $manualResult.Messages) {
+                    if ($msg) {
+                        Write-Warning $msg
+                        if ($FailureList.Value) { $FailureList.Value += $msg } else { $FailureList.Value = @($msg) }
+                    }
+                }
+            }
+
+            if ($manualResult.Success) {
+                Write-Verbose "Downloaded DSInternals manually to '$moduleRoot'."
+                try {
+                    Import-Module -Name DSInternals -Force -ErrorAction Stop
+                    return $true
+                } catch {
+                    $message = "DSInternals could not be imported after manual download: $($_.Exception.Message)"
+                    Write-Warning $message
+                    if ($FailureList.Value) { $FailureList.Value += $message } else { $FailureList.Value = @($message) }
+                }
+            } else {
+                $message = 'Manual DSInternals download did not complete successfully.'
+                Write-Warning $message
+                if ($FailureList.Value) { $FailureList.Value += $message } else { $FailureList.Value = @($message) }
+            }
+
+            return $false
+        }
+
         # Determine Windows platform for PowerShell editions where $IsWindows is unavailable.
         $runningOnWindows = $false
         $isWindowsIndicator = Get-Variable -Name 'IsWindows' -ValueOnly -ErrorAction SilentlyContinue
@@ -78,6 +233,8 @@ function Invoke-ADExposureAudit {
             }
         }
 
+        $autoInstallFailureMessages = @()
+
         if (-not (Get-Command -Name Get-ADReplAccount -ErrorAction SilentlyContinue)) {
             if ($runningOnWindows) {
                 Write-Warning 'The DSInternals module is required for Active Directory replication (Get-ADReplAccount).'
@@ -86,39 +243,84 @@ function Invoke-ADExposureAudit {
                     $no  = New-Object System.Management.Automation.Host.ChoiceDescription '&No','Skip installation.'
                     $choice = $Host.UI.PromptForChoice('DSInternals Required', 'DSInternals is not installed. Would you like to install it now?', @($yes,$no), 0)
                     if ($choice -eq 0) {
-                        # Ensure TLS 1.2+ for gallery downloads
+                        $installModuleCmd = $null
                         try {
-                            $currentMaxTls = [Math]::Max([Net.ServicePointManager]::SecurityProtocol.value__,[Net.SecurityProtocolType]::Tls.value__)
-                            $newTlsTypes = [enum]::GetValues('Net.SecurityProtocolType') | Where-Object { $_ -gt $currentMaxTls }
-                            $newTlsTypes | ForEach-Object {
-                                [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor $_
-                            }
-                        } catch {}
-
-                        # Make sure PowerShellGet/PSGallery are available
-                        try { Import-Module PowerShellGet -ErrorAction SilentlyContinue | Out-Null } catch {}
-                        $psGallery = $null
-                        try { $psGallery = Get-PSRepository -Name 'PSGallery' -ErrorAction Stop } catch {}
-                        if (-not $psGallery) {
-                            try { Register-PSRepository -Default -ErrorAction Stop } catch {}
-                        }
-
-                        Write-Verbose 'Installing DSInternals module (CurrentUser scope)...'
-                        try {
-                            Install-Module -Name DSInternals -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
+                            $installModuleCmd = Get-Command -Name Install-Module -ErrorAction Stop
                         } catch {
-                            Write-Warning "Failed to install DSInternals from the PowerShell Gallery: $_"
+                            $installModuleCmd = $null
                         }
 
-                        try { Import-Module -Name DSInternals -Force -ErrorAction Stop } catch { Write-Warning "DSInternals could not be imported: $_" }
+                        $manualFallbackTriggered = $false
+                        if (-not $installModuleCmd) {
+                            $message = 'Install-Module (PowerShellGet) is unavailable; automatic installation cannot continue.'
+                            Write-Warning $message
+                            $autoInstallFailureMessages += $message
+                            $manualFallbackTriggered = $true
+                            [void]$invokeManualDSInternalsFallback.Invoke([ref]$autoInstallFailureMessages)
+                        } else {
+                            # Ensure TLS 1.2+ for gallery downloads
+                            try {
+                                $currentMaxTls = [Math]::Max([Net.ServicePointManager]::SecurityProtocol.value__,[Net.SecurityProtocolType]::Tls.value__)
+                                $newTlsTypes = [enum]::GetValues('Net.SecurityProtocolType') | Where-Object { $_ -gt $currentMaxTls }
+                                $newTlsTypes | ForEach-Object {
+                                    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor $_
+                                }
+                            } catch {}
+
+                            # Make sure PowerShellGet/PSGallery are available
+                            try { Import-Module PowerShellGet -ErrorAction SilentlyContinue | Out-Null } catch {}
+                            $psGallery = $null
+                            try { $psGallery = Get-PSRepository -Name 'PSGallery' -ErrorAction Stop } catch {}
+                            if (-not $psGallery) {
+                                try { Register-PSRepository -Default -ErrorAction Stop } catch {}
+                            }
+
+                            Write-Verbose 'Installing DSInternals module (CurrentUser scope)...'
+                            $installSucceeded = $true
+                            try {
+                                Install-Module -Name DSInternals -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
+                            } catch {
+                                $installSucceeded = $false
+                                $failure = "Failed to install DSInternals from the PowerShell Gallery: $($_.Exception.Message)"
+                                Write-Warning $failure
+                                $autoInstallFailureMessages += $failure
+                                if (-not $manualFallbackTriggered) {
+                                    $manualFallbackTriggered = $true
+                                    [void]$invokeManualDSInternalsFallback.Invoke([ref]$autoInstallFailureMessages)
+                                }
+                            }
+
+                            if ($installSucceeded -and -not $manualFallbackTriggered) {
+                                try {
+                                    Import-Module -Name DSInternals -Force -ErrorAction Stop
+                                } catch {
+                                    $failure = "DSInternals could not be imported after installation: $($_.Exception.Message)"
+                                    Write-Warning $failure
+                                    $autoInstallFailureMessages += $failure
+                                    $manualFallbackTriggered = $true
+                                    [void]$invokeManualDSInternalsFallback.Invoke([ref]$autoInstallFailureMessages)
+                                }
+                            }
+                        }
                     }
                 } catch {
-                    Write-Warning "An error occurred while prompting to install DSInternals: $_"
+                    $failure = "An error occurred while prompting to install DSInternals: $($_.Exception.Message)"
+                    Write-Warning $failure
+                    $autoInstallFailureMessages += $failure
                 }
             }
 
             if (-not (Get-Command -Name Get-ADReplAccount -ErrorAction SilentlyContinue)) {
-                throw "Get-ADReplAccount was not found. Install and import the DSInternals module."
+                if ($autoInstallFailureMessages.Count -gt 0) {
+                    Write-Warning 'Automatic DSInternals installation failed. Install the module manually so Get-ADReplAccount is available before rerunning.'
+                    foreach ($failure in ($autoInstallFailureMessages | Select-Object -Unique)) {
+                        if ($failure) {
+                            Write-Warning $failure
+                        }
+                    }
+                }
+
+                throw "Get-ADReplAccount was not found. Install and import the DSInternals module, then rerun Invoke-ADExposureAudit. See https://github.com/MichaelGrafnetter/DSInternals for manual installation guidance."
             }
         }
 
