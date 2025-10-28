@@ -62,7 +62,47 @@ function Invoke-ADExposureAudit {
         }
 
         if (-not (Get-Command -Name Get-ADReplAccount -ErrorAction SilentlyContinue)) {
-            throw "Get-ADReplAccount was not found. Install and import the DSInternals module."
+            if ($IsWindows) {
+                Write-Warning 'The DSInternals module is required for Active Directory replication (Get-ADReplAccount).'
+                try {
+                    $yes = New-Object System.Management.Automation.Host.ChoiceDescription '&Yes','Install DSInternals for the current user from the PowerShell Gallery.'
+                    $no  = New-Object System.Management.Automation.Host.ChoiceDescription '&No','Skip installation.'
+                    $choice = $Host.UI.PromptForChoice('DSInternals Required', 'DSInternals is not installed. Would you like to install it now?', @($yes,$no), 0)
+                    if ($choice -eq 0) {
+                        # Ensure TLS 1.2+ for gallery downloads
+                        try {
+                            $currentMaxTls = [Math]::Max([Net.ServicePointManager]::SecurityProtocol.value__,[Net.SecurityProtocolType]::Tls.value__)
+                            $newTlsTypes = [enum]::GetValues('Net.SecurityProtocolType') | Where-Object { $_ -gt $currentMaxTls }
+                            $newTlsTypes | ForEach-Object {
+                                [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor $_
+                            }
+                        } catch {}
+
+                        # Make sure PowerShellGet/PSGallery are available
+                        try { Import-Module PowerShellGet -ErrorAction SilentlyContinue | Out-Null } catch {}
+                        $psGallery = $null
+                        try { $psGallery = Get-PSRepository -Name 'PSGallery' -ErrorAction Stop } catch {}
+                        if (-not $psGallery) {
+                            try { Register-PSRepository -Default -ErrorAction Stop } catch {}
+                        }
+
+                        Write-Verbose 'Installing DSInternals module (CurrentUser scope)...'
+                        try {
+                            Install-Module -Name DSInternals -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
+                        } catch {
+                            Write-Warning "Failed to install DSInternals from the PowerShell Gallery: $_"
+                        }
+
+                        try { Import-Module -Name DSInternals -Force -ErrorAction Stop } catch { Write-Warning "DSInternals could not be imported: $_" }
+                    }
+                } catch {
+                    Write-Warning "An error occurred while prompting to install DSInternals: $_"
+                }
+            }
+
+            if (-not (Get-Command -Name Get-ADReplAccount -ErrorAction SilentlyContinue)) {
+                throw "Get-ADReplAccount was not found. Install and import the DSInternals module."
+            }
         }
 
         $getDomainAccounts = {
